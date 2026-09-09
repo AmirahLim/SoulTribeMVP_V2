@@ -1,0 +1,26 @@
+---
+description: Keep Soul Tribe data in three isolated boxes and scale matching spatially first
+alwaysApply: true
+---
+
+# Three-box foundation
+
+Keep backend data in three isolated Postgres schemas. Do not mix their write paths.
+
+- **Box 1 `account.details`**: username, avatar, phone. Rarely changes. Phone never belongs on `public.profiles`.
+- **Box 2 `behavior.matrix`**: integers 0–100 (social_energy, spontaneity, …). Matching-only. No AI API required. Never expose another member's raw matrix to the client.
+- **Box 3 `geo.live_presence`**: live coordinates. Owner RLS only (`auth.uid()`). Matching may receive **user IDs**, never raw points.
+
+## Rules
+
+1. Spatial filter first. Call `filter_local_online_ids` (PostGIS / distance) on currently online local members, then score behavior on that small pool. Do not scan or score the global member table.
+2. Live outing pings use Supabase Realtime **broadcast** channels in memory. Do not insert temporary live pings into `outing_notifications` or any other durable table.
+3. RLS on geo is owner-only. Never add `geo` tables to `supabase_realtime`. Never `select` another user's row from `geo.live_presence` in app code, including service-role matching.
+
+```ts
+// ❌ BAD — score everyone, then filter
+const people = await admin.from('profiles').select('*').limit(150000);
+
+// ✅ GOOD — distance/online IDs first, then traits for those IDs
+const { data } = await userClient.rpc('filter_local_online_ids', { p_radius_meters: 5000 });
+```

@@ -638,6 +638,34 @@ await db.query('insert into blocks(blocker_id,blocked_id) values($1,$2)',[observ
 assert.equal((await db.query("select can_submit_peer_read_check($1,'peer-check','writer') ok",[host])).rows[0].ok,false);
 await assert.rejects(db.query("select submit_peer_read_check($1,'peer-check','writer','mostly')",[host]),/unavailable/);
 await db.query("select submit_peer_read_check($1,'peer-check','writer',null)",[host]);
+await db.exec('reset role');
+for (let i = 0; i < 2; i++) {
+  await db.exec(await readFile(new URL('../supabase/migrations/20261009000000_three_box_foundation.sql', import.meta.url), 'utf8'));
+}
+await as(host);
+await db.query('select upsert_live_presence($1,$2,true)', [103.8198, 1.3521]);
+await as(guest);
+await db.query('select upsert_live_presence($1,$2,true)', [103.821, 1.353]);
+await as(other);
+await db.query('select upsert_live_presence($1,$2,true)', [0, 51.5]);
+await as(guest);
+assert.equal((await db.query('select user_id from geo.live_presence')).rows.length, 1);
+assert.equal((await db.query('select user_id from geo.live_presence')).rows[0].user_id, guest);
+assert.equal((await db.query('select * from account.details where user_id=$1', [host])).rows.length, 0);
+await as(host);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_online_ids(5000) order by user_id')).rows.map((row) => row.user_id),
+  [guest],
+);
+await db.exec('reset role');
+await fails("insert into outing_notifications(user_id,outing_id,message) values($1,$2,'live ping: nearby')", /live_ping|check/, [host, outing]);
+assert.equal(
+  (await db.query("select tablename from pg_publication_tables where pubname='supabase_realtime' and schemaname='geo'")).rows.length,
+  0,
+);
+await as(host);
+assert.ok((await db.query('select username from account.details where user_id=$1', [host])).rows[0].username);
+console.log('Passed three-box isolation, spatial-first local online filter, owner-only geo RLS, no live-ping disk writes and Realtime exclusion.');
 // Account deletion must not resurrect a repair projection during cascading deletes.
 await db.exec('reset role');
 await db.query("insert into profile_answers(user_id,onboarding,deep_profile) values($1,'{}',$2)",[observers[4],{repairFirst:'Ask how they saw it',repairNeed:'A clear apology'}]);

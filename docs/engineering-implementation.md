@@ -17,6 +17,7 @@ Apply all migrations in order to staging. New migrations are:
 - `20260911000000_consent_and_private_context.sql`
 - `20260912000000_atomic_profile_saving.sql`
 - `20260913000000_outcomes_and_atomic_pitch.sql`
+- `20261009000000_three_box_foundation.sql` (account / behavior / geo isolation, spatial-first match RPC, owner-only live presence)
 
 The client requires these migrations. No live Supabase project was inspected or changed. Compare the actual live schema with committed history before applying them. Existing databases may have manual changes or dirty data that a clean migration run cannot reveal.
 

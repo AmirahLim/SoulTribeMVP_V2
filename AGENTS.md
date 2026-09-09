@@ -30,6 +30,10 @@ Private home venues are disabled by the logistics schema. Waitlist automation, v
 ## Working rules
 
 Use additive migrations and reversible changes. Pair frontend changes with their required database migration.
+Keep data in three isolated boxes: `account.details` (stable identity), `behavior.matrix` (0–100 matching integers), `geo.live_presence` (live coordinates). See `docs/three-box-foundation.md`.
+When searching for matches, call `filter_local_online_ids` first (distance + currently online). Score behavior only on that small pool. Never scan the global member table to compute compatibility.
+Broadcast live outing pings on Supabase Realtime channels. Do not save temporary live pings to disk (`outing_notifications` is for durable membership/state notices only).
+Enforce owner-only RLS on geo with `auth.uid()`. App code must never read another user's raw coordinates, including via service role table scans.
 Do not silently backfill legacy browser profiles: sample answers had uncertain provenance.
 Full original answers belong in `profile_answers`, not publicly readable `profiles`.
 Run `npm run typecheck`, `npm test`, and `npm run test:db`. Database security tests use local PGlite with Supabase auth/storage schema shims; staging Supabase and real concurrent-client checks remain a release gate.
