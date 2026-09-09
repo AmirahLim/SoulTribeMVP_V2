@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-import {createOpenAIWriter,BRAND_VOICE} from '../readEngine/openaiWriter';
+import {createOpenAIWriter,BRAND_VOICE,optionalReadWriter} from '../readEngine/openaiWriter';
 import {buildEvidence} from '../readEngine/evidence';
 import {composeRead,writeRead} from '../readEngine/compose';
 const bundle=buildEvidence({onboarding:{baselineV2:{intent:['Close circle']}}},'early');
@@ -10,8 +10,10 @@ describe('disabled-by-default external writer contract (mock requests only)',()=
     const writer=createOpenAIWriter({apiKey:'local-test-only',model:'mock-model',budget,fetcher});
     expect(await writeRead(bundle,writer)).toEqual(plan);
     expect(fetcher).not.toHaveBeenCalled();
-    expect(BRAND_VOICE).toContain('wise, warm friend');
-    expect(BRAND_VOICE).toContain('not a list of answers');
+    expect(BRAND_VOICE).toContain('poetic, deep, behavioral interpreter');
+    expect(BRAND_VOICE).toContain('at least two paragraphs');
+    expect(BRAND_VOICE).toContain('repeating user inputs literally');
+    expect(optionalReadWriter()).toBeUndefined();
   });
   it('requests no provider storage and rebuilds immutable evidence, recording actual reported tokens',async()=>{
     const budget={reserve:vi.fn().mockResolvedValue('local-reservation'),settle:vi.fn()};
@@ -22,6 +24,8 @@ describe('disabled-by-default external writer contract (mock requests only)',()=
     expect(result.writer).toBe('external');
     expect(result.sections[0].evidence).toEqual(plan.sections[0].evidence);
     expect(JSON.parse(fetcher.mock.calls[0][1].body).store).toBe(false);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).input[1].content).toContain('You are a poetic, deep, behavioral interpreter');
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).input[1].content).toContain('"dimension":"intent"');
     expect(budget.settle).toHaveBeenCalledWith('local-reservation',{inputTokens:123,outputTokens:45});
   });
   it('does not retry or release an ambiguous paid reservation',async()=>{

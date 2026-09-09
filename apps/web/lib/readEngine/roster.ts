@@ -18,11 +18,11 @@ export function rosterReadings(bundles:Map<string,EvidenceBundle>){
      selected.push(c);used.set(c.text,(used.get(c.text)??0)+1);
      if(selected.length===n)break;
    }
-   return selected.map(c=>c.text).join(' ');
+   return selected.map(c=>c.text).join('\n\n');
  };
  return new Map([...pools].map(([id,pool])=>[id,{
    hasEvidence:pool.some(c=>c.tone==='click'||c.tone==='context'),
-   click_text:select(pool.filter(c=>c.tone==='click'),2)||select(pool.filter(c=>c.tone==='context'),1)||'There is not enough shared, visible evidence to explain a connection yet. This is not a mismatch.',
-   friction_text:select(pool.filter(c=>c.tone==='friction'),1)||'No specific friction is supported by the information you have both shared so far.',
+   click_text:select(pool.filter(c=>c.tone==='click'),2)||select(pool.filter(c=>c.tone==='context'),2)||'There is not enough shared, visible evidence to explain a connection yet. This is not a mismatch.',
+   friction_text:select(pool.filter(c=>c.tone==='friction'),2)||'No specific friction is supported by the information you have both shared so far.',
  }]));
 }

@@ -4,6 +4,7 @@ import { toProfileVector } from '../../../lib/profileAdapter';
 import { adaptRowToUserData } from '../../../lib/profileRowAdapter';
 import {loadPairEvidence,cachedRead,evidenceHash} from '../../../lib/readEngine/server';
 import {connectionThread} from '../../../lib/readEngine/compose';
+import {poeticReadingSummary} from '../../../lib/readEngine/poeticEngine';
 import {pairClaims} from '../../../lib/readEngine/relational';
 import {evidenceThreadReading} from '../../../lib/readEngine/threadReading';
 import {THREAD_NAMES,type EvidenceBundle} from '../../../lib/readEngine/evidence';
@@ -278,7 +279,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     candidate: { id: candRow.id, displayName: candRow.display_name, bio: candRow.bio, homeArea: candRow.home_area },
-    clickText: composed.read.sections[0]?.text??'',
+    clickText: poeticReadingSummary(composed.read, composed.read.sections[0]?.text??''),
     composedRead:composed.read,
     readHash:composed.hash,
     writerVersion:composed.writerVersion,

@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {buildEvidence, pairEvidence, type EvidenceBundle} from './evidence';
 import {composeRead,writeRead,priorReadPhrases,type ComposedRead,type Writer} from './compose';
+import {optionalReadWriter,WRITER_PROMPT_VERSION} from './openaiWriter';
 import catalog from '../onboardingQuestionCatalog.json';
 import {deepChoices} from '../savedAnswerRead';
 import {includeMeasurements,MEASUREMENT_SELECT} from './legacy';
@@ -88,7 +89,9 @@ export async function loadRosterEvidence(client:SupabaseClient,viewer:string,ids
   return result;
 }
 /** Fresh authorisation/evidence must precede every call, including cache hits. */
-export async function cachedRead(client:SupabaseClient,viewer:string,subject:string,bundle:EvidenceBundle,writer?:Writer,writerVersion='deterministic/8a.2'){
+export async function cachedRead(client:SupabaseClient,viewer:string,subject:string,bundle:EvidenceBundle,writer?:Writer,writerVersion?:string){
+  const activeWriter=writer??optionalReadWriter();
+  writerVersion=(activeWriter?WRITER_PROMPT_VERSION:'deterministic/8a.2');
   // Remember wording across views without ever feeding another read to a writer.
   // Early wording is derived from the same visible baseline evidence, not a new fact.
   const {data:history,error:historyError}=await client.from('read_phrase_history').select('phrase').eq('viewer_id',viewer).in('subject_id',[viewer,subject]).neq('level',bundle.level);
@@ -104,7 +107,7 @@ export async function cachedRead(client:SupabaseClient,viewer:string,subject:str
   // Another request owns the lease. No duplicate external generation or long wait.
   if(data?.state==='busy')return {read:composeRead(bundle,priorPhrases),hash,writerVersion,cache:'busy-fallback',durationMs:performance.now()-started};
   if(data?.state!=='claimed'||typeof data.lease!=='string')throw new Error('Unable to claim reading');
-  const read=await writeRead(bundle,writer,priorPhrases);
+  const read=await writeRead(bundle,activeWriter,priorPhrases);
   const finished=await client.rpc('finish_composed_read',{p_viewer:viewer,p_subject:subject,p_level:bundle.level,p_hash:hash,p_lease:data.lease,p_document:read});
   if(finished.error)fail('cache publish',finished.error);
   if(finished.data!==true)throw new Error('Reading changed while it was being prepared. Please retry.');

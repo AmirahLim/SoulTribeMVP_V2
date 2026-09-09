@@ -172,7 +172,7 @@ export async function writeRead(bundle:EvidenceBundle,writer?:Writer,priorPhrase
       return s.claims.every(c=>{
       const original=known.get(c.id);
       if(seenClaims.has(c.id)||!section.claims.some(claim=>claim.id===c.id)||typeof c.text!=='string'
-        ||c.text.length>1200||prose.some(text=>repeatsReadText(text,c.text)))return false;
+        ||c.text.length>2400||prose.some(text=>repeatsReadText(text,c.text)))return false;
       seenClaims.add(c.id);prose.push(c.text);
       return original&&JSON.stringify(c.sourceIds)===JSON.stringify(original.sourceIds)
         &&JSON.stringify(c.dimensions)===JSON.stringify(original.dimensions)&&JSON.stringify(c.threads)===JSON.stringify(original.threads)
@@ -181,6 +181,6 @@ export async function writeRead(bundle:EvidenceBundle,writer?:Writer,priorPhrase
     if(!accepted||!output.sections.length)return fallback;
     // Do not trust model-provided free-standing paragraphs/disclosures or metadata.
     return {...fallback,writer:'external',sections:output.sections.map(s=>({...s,
-      title:known.get(s.claims[0].id)!.title,text:s.claims.map(c=>c.text).join(' '),evidence:disclosure(s.claims,bundle)}))};
+      title:known.get(s.claims[0].id)!.title,text:s.claims.map(c=>c.text).join('\n\n'),evidence:disclosure(s.claims,bundle)}))};
   }catch{return fallback;}
 }

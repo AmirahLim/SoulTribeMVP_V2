@@ -44,7 +44,7 @@ return <div className={s.album}>
 <div className={s.stringSummary}>
 {synthesis[0]&&<h2>{synthesis[0].title}</h2>}
 <svg className={s.stringSide} viewBox="0 0 32 300" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M29 0 C8 15 13 36 24 51 C38 73 5 82 10 108 C15 132 33 131 26 156 C17 188 4 193 10 219 C17 247 31 266 13 300" /></svg>
-<p className={s.summaryLead}>{synthesis[0]?.text??'There is not enough shared evidence for a composed reading yet. Unmeasured threads are not a mismatch.'}</p>
+<p className={s.summaryLead}>{synthesis.slice(0,2).map(part=>part.text).filter(Boolean).join('\n\n')||'There is not enough shared evidence for a composed reading yet. Unmeasured threads are not a mismatch.'}</p>
 <svg className={s.stringUnder} viewBox="0 0 700 64" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M0 45 C62 62 91 9 148 20 C206 31 162 62 238 52 C305 43 393 14 372 5 C345 -5 316 22 362 36 C406 50 445 42 472 56 C493 66 558 61 593 41 C628 18 655 37 700 4" /></svg>
 </div>
 {synthesis[0]&&<details className={s.evidence}><summary>What this reading draws on <span aria-hidden="true">+</span></summary>

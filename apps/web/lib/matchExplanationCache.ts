@@ -6,7 +6,7 @@ import {rosterReadings} from './readEngine/roster';
 import {repeatedSpan,proseSimilarity} from './readEngine/compose';
 
 // Bump whenever explanation composition, vocabulary or disclosed inputs change.
-export const EXPLANATION_ENGINE_VERSION = 'match-explanation/8a.3';
+export const EXPLANATION_ENGINE_VERSION = 'match-explanation/8a.5';
 export type ExplanationProfile = { id: string; profile_version: number; explanation_revision: number };
 export type ExplanationText = { click_text: string; friction_text: string };
 type Input = { row: ExplanationProfile; vector: ProfileVector };

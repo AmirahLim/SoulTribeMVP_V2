@@ -37,8 +37,8 @@ export function SocialScrapbook({name, handle, area, avatar, bio, headline, summ
         <div className={styles.intro}>
           {!own && <p className={`${styles.handwritten} ${handwriting.className}`}>there’s a whole person here.</p>}
           <h2>{headline || (own ? 'Your story is still unfolding.' : 'Getting to know them, gently.')}</h2>
-          <p>{summary ? brief(summary, 280) : own ? 'Six questions are a beginning, not the whole of you. Your Social Read grows with what you choose to share.' : 'Open the little pages below to discover what they’ve chosen to share about friendship.'}</p>
-          {summary && summary.length > 280 && <details className={styles.summaryMore}><summary>Read the rest</summary><p>{summary}</p></details>}
+          <p className={styles.summaryBody}>{summary ? summary.split(/\n\n+/)[0] : own ? 'Six questions are a beginning, not the whole of you. Your Social Read grows with what you choose to share.' : 'Open the little pages below to discover what they’ve chosen to share about friendship.'}</p>
+          {summary && summary.includes('\n\n') && <details className={styles.summaryMore}><summary>Read the rest</summary><p className={styles.summaryBody}>{summary.split(/\n\n+/).slice(1).join('\n\n')}</p></details>}
           {bio && <details className={styles.summaryMore}><summary>{own ? 'In my own words' : 'In their own words'}</summary><p>{bio}</p></details>}
           {earlyReadHref && <Link className={styles.earlyRead} href={earlyReadHref}>{own ? 'View my Early Read →' : `View ${name}’s Early Read →`}</Link>}
           {own && <Link className={styles.deepen} href="/you/deeper">You’re more than six answers. Go a little deeper ↗</Link>}

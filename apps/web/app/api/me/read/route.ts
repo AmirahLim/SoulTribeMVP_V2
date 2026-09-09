@@ -5,6 +5,7 @@ import { adaptRowToUserData } from '../../../../lib/profileRowAdapter';
 import { buildSavedAnswerRead } from '../../../../lib/savedAnswerRead';
 import {buildEvidence, THREAD_NAMES} from '../../../../lib/readEngine/evidence';
 import {composeRead,availableClaims} from '../../../../lib/readEngine/compose';
+import {poeticReadingSummary} from '../../../../lib/readEngine/poeticEngine';
 import {cachedRead,loadOwnEvidence,evidenceHash} from '../../../../lib/readEngine/server';
 import {
   extractMarkers,
@@ -436,7 +437,7 @@ export async function GET(req: NextRequest) {
     selfProfile.tribalRead = {
       ...selfProfile.tribalRead,
       headline: composedRead.sections[0]?.title ?? 'Your reading is taking shape',
-      summary: composedRead.sections[0]?.text || savedAnswerRead.facts.slice(0, 3).map(fact => fact.note).join(' '),
+      summary: poeticReadingSummary(composedRead, composedRead.sections[0]?.text || savedAnswerRead.facts.slice(0, 3).map(fact => fact.note).join(' ')),
       sections: selfProfile.tribalRead.sections,
     };
   }
