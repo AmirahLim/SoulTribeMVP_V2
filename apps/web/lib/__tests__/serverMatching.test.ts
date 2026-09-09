@@ -4,7 +4,16 @@ import { getRankedMatches, RankedMatch } from '../matching';
 import { POST } from '../../app/api/matches/route';
 import { NextRequest } from 'next/server';
 import { evaluateGates } from '@soul-tribe/core';
-const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],rpcIds:null as string[] | null,calls:[] as string[]}));
+const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],rpcIds:null as string[] | null,calls:[] as string[],rpcRadius:null as number | null,baseline:{
+  travelKm:10,
+  intent:['Close circle'],
+  clicks:['Our humour just lands'],
+  groupChoices:['Small circle'],
+  desiredQualities:['Reliable'],
+  connectionChoice:'About once a week',
+  planningChoice:'A few days',
+  outings:['Specialty Coffee'],
+}}));
 
 vi.mock('../supabase', () => ({
   checkIsSupabaseConfigured: () => true,
@@ -13,6 +22,13 @@ vi.mock('../supabase', () => ({
       getSession: async () => ({
         data: { session: { access_token: 'valid_token', user: { id: 'viewer-1' } } },
       }),
+    },
+    rpc: async (name: string, args?: { p_radius_meters?: number }) => {
+      cacheTestState.calls.push(`browser-rpc:${name}:${args?.p_radius_meters ?? ''}`);
+      if (name === 'filter_local_online_ids') {
+        return { data: [{ user_id: 'candidate-alice' }], error: null };
+      }
+      return { data: null, error: null };
     },
   }),
 }));
@@ -23,8 +39,9 @@ vi.mock('@supabase/supabase-js', () => {
     createClient: vi.fn((url: string, key: string) => {
       const isAnonKey = key.startsWith('sb_publishable') || key.includes('anon');
       return {
-        rpc: async (name: string) => {
+        rpc: async (name: string, args?: { p_radius_meters?: number }) => {
           cacheTestState.calls.push(`rpc:${name}:${isAnonKey ? 'user' : 'admin'}`);
+          cacheTestState.rpcRadius = args?.p_radius_meters ?? null;
           if (name !== 'filter_local_online_ids') return { data: null, error: new Error('unknown rpc') };
           if (cacheTestState.rpcIds) return { data: cacheTestState.rpcIds.map((user_id: string) => ({ user_id })), error: null };
           const ids = ['candidate-alice', 'blocked-user-99', ...Array.from({ length: cacheTestState.extra }, (_, i) => 'extra-candidate-' + i)];
@@ -139,6 +156,19 @@ vi.mock('@supabase/supabase-js', () => {
             };
             return { select: () => q };
           }
+          if (table === 'profile_answers') {
+            cacheTestState.calls.push('profile_answers');
+            return {
+              select: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { onboarding: { baselineV2: cacheTestState.baseline } },
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          }
           if (table === 'recommendation_preferences') return { select: () => ({eq: () => ({maybeSingle: async () => ({data:null,error:null})})}) };
           if (table === 'interaction_events') return { insert: async () => ({error:null}) };
           return {
@@ -158,7 +188,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
   const oldEnv = process.env;
 
   beforeEach(() => {
-    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.rpcIds=null;cacheTestState.calls=[];
+    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.rpcIds=null;cacheTestState.calls=[];cacheTestState.rpcRadius=null;
     process.env = {
       ...oldEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -209,10 +239,14 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
       return new Response(JSON.stringify([]), { status: 200 });
     });
 
-    const viewerUser = { id: 'viewer-1', displayName: 'Viewer', homeArea: 'Singapore', avatarUrl: '', bio: '', passCompletionPct: 80 };
+    const viewerUser = { id: 'viewer-1', displayName: 'Viewer', homeArea: 'Singapore', avatarUrl: '', bio: '', passCompletionPct: 80, travelKm: 10 };
     const results = await getRankedMatches(viewerUser, { userId: 'viewer-1' });
 
     expect(results).toHaveLength(2);
+    expect(cacheTestState.calls).toContain('browser-rpc:filter_local_online_ids:10000');
+    expect(JSON.parse(String((fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined)?.body))).toEqual(
+      expect.objectContaining({ radiusMeters: 10000 }),
+    );
     expect(results[0].rankScore).toBe(0.89);
     expect(results[0].clickText).toBe('Unique alignment on slow weekend coffee rituals with Alice.');
     expect(results[0].homeArea).toBe('Tiong Bahru');
@@ -385,7 +419,8 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     }));
     expect(empty.status).toBe(200);
     expect(await empty.json()).toEqual([]);
-    expect(cacheTestState.calls[0]).toBe('rpc:filter_local_online_ids:user');
+    expect(cacheTestState.calls[0]).toBe('profile_answers');
+    expect(cacheTestState.calls).toContain('rpc:filter_local_online_ids:user');
     expect(cacheTestState.calls.filter((call) => call === 'profiles').length).toBe(1);
 
     cacheTestState.calls = [];
@@ -395,7 +430,16 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     }));
     const json = await local.json();
     expect(json.map((row: { id: string }) => row.id)).toEqual(['candidate-alice']);
-    expect(cacheTestState.calls[0]).toBe('rpc:filter_local_online_ids:user');
+    expect(cacheTestState.calls).toContain('rpc:filter_local_online_ids:user');
+  });
+
+  it('passes onboarding travelKm into filter_local_online_ids when the client omits radiusMeters', async () => {
+    const res = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 6 }),
+    }));
+    expect(res.status).toBe(200);
+    expect(cacheTestState.calls).toContain('profile_answers');
+    expect(cacheTestState.rpcRadius).toBe(10000);
   });
 
   it('7. Unconfigured env variables return 500 naming missing variables', async () => {

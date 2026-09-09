@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {MatchKeepsake} from '../../components/MatchKeepsake';
 import { getUserProfile } from '../../lib/userStore';
-import { getRankedMatches, RankedMatch, countRealMembers, isSmallCommunityMode } from '../../lib/matching';
+import { getLastSpatialPoolSize, getRankedMatches, RankedMatch, countRealMembers, isSmallCommunityMode } from '../../lib/matching';
 import { MapPin, ArrowRight, AlertCircle, Sparkles, Users } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -27,6 +27,7 @@ function PeopleListContent() {
   const [isSmallCommunity, setIsSmallCommunity] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nearbyEmpty, setNearbyEmpty] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +51,7 @@ function PeopleListContent() {
         setRealMemberCount(realCount);
         setIsSmallCommunity(isSmall);
         setMatches(ranked);
+        setNearbyEmpty(ranked.length === 0 && getLastSpatialPoolSize() === 0);
         setError(null);
       } catch (err) {
         if (cancelled) return;
@@ -135,9 +137,13 @@ function PeopleListContent() {
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-[24px] border border-white/20">
               ✨
             </div>
-            <h3 className="mt-4 text-[20px] font-extrabold text-white">No matches yet</h3>
+            <h3 className="mt-4 text-[20px] font-extrabold text-white">
+              {nearbyEmpty ? 'Nobody nearby is online' : 'No matches yet'}
+            </h3>
             <p className="mt-2 text-[14px] leading-relaxed text-white/80 max-w-[300px]">
-              No eligible connections were returned this time. Your saved answers are still here; you can review your preferences or check back later.
+              {nearbyEmpty
+                ? 'Matching looks first at people who are currently online within your travel distance. Check location permission, or try again when someone nearby is around.'
+                : 'No eligible connections were returned this time. Your saved answers are still here; you can review your preferences or check back later.'}
             </p>
             <Link href="/you/deeper" className="mt-6">
               <span className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[13.5px] font-bold text-black shadow-lg transition-transform hover:scale-105">

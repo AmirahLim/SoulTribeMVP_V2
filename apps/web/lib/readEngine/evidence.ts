@@ -2,6 +2,7 @@ import catalog from '../onboardingQuestionCatalog.json';
 import {buildSavedAnswerRead} from '../savedAnswerRead';
 import {REPAIR_QUESTIONS,INITIATIVE_QUESTION} from './deeperQuestions';
 import {OPENING_QUESTION} from './emotionalQuestion';
+import {resolveOnboardingBaseline} from '../onboardingBundle';
 
 export const READ_ENGINE_VERSION = 'read-spine/8a.4';
 export const DISCLOSURE_VERSION = 'public-fixed-choice/repair-detail.2';
@@ -25,7 +26,7 @@ const equal = (a:unknown,b:unknown) => JSON.stringify(a)===JSON.stringify(b);
 
 /** Closed allowlist boundary. Database callers must authorise the audience first. */
 export function buildEvidence(row:unknown, level:ReadLevel, subject:'self'|'other'='self', sharedDetail=false):EvidenceBundle {
-  const saved=object(row), baseline=object(object(saved.onboarding).baselineV2);
+  const saved=object(row), baseline=resolveOnboardingBaseline(saved);
   const records=object(baseline.answerRecords);
   const facts=buildSavedAnswerRead(saved).facts;
   const sources:Source[]=facts.flatMap(fact=>{

@@ -14,6 +14,8 @@ import { toProfileVector } from './profileAdapter';
 export { toProfileVector };
 import { initTelemetry } from './telemetryInit';
 import { getSupabaseBrowserClient, checkIsSupabaseConfigured } from './supabase';
+import { filterLocalOnlineIds, reportBrowserLivePresence } from './livePresence';
+import { radiusMetersFromProfile } from './onboardingSpatial';
 
 export type CandidateMode = 'real' | 'demo' | 'mixed';
 
@@ -53,14 +55,20 @@ export interface CandidateSource {
 export interface ScoredMatchSource {
   getScoredMatches(
     viewerVec: ProfileVector,
-    opts?: { area?: string; limit?: number; activityCategory?: string }
+    opts?: { area?: string; limit?: number; activityCategory?: string; radiusMeters?: number }
   ): Promise<RankedMatch[]>;
+}
+
+let lastSpatialPoolSize: number | null = null;
+
+export function getLastSpatialPoolSize(): number | null {
+  return lastSpatialPoolSize;
 }
 
 export const realCandidateSource: ScoredMatchSource = {
   async getScoredMatches(
     _viewerVec: ProfileVector,
-    _opts?: { area?: string; limit?: number; activityCategory?: string }
+    _opts?: { area?: string; limit?: number; activityCategory?: string; radiusMeters?: number }
   ): Promise<RankedMatch[]> {
     if (!checkIsSupabaseConfigured()) {
       throw new Error('Member discovery is not configured. Please contact support.');
@@ -79,9 +87,13 @@ export const realCandidateSource: ScoredMatchSource = {
         throw new Error('Your session is not ready. Please sign in again.');
       }
 
+      await reportBrowserLivePresence();
+      const radiusMeters = _opts?.radiusMeters ?? radiusMetersFromProfile(null);
+      lastSpatialPoolSize = (await filterLocalOnlineIds(radiusMeters)).length;
+
       const res = await fetch('/api/matches', {
         method: 'POST',
-        body: JSON.stringify({ activityCategory: _opts?.activityCategory, limit: _opts?.limit }),
+        body: JSON.stringify({ activityCategory: _opts?.activityCategory, limit: _opts?.limit, radiusMeters }),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -126,12 +138,13 @@ export function getLastCandidateFetchError(): string | null {
 
 export function clearLastCandidateFetchError(): void {
   lastCandidateFetchError = null;
+  lastSpatialPoolSize = null;
 }
 
 export const mixedCandidateSource: ScoredMatchSource = {
   async getScoredMatches(
     viewerVec: ProfileVector,
-    opts?: { area?: string; limit?: number; activityCategory?: string }
+    opts?: { area?: string; limit?: number; activityCategory?: string; radiusMeters?: number }
   ): Promise<RankedMatch[]> {
     clearLastCandidateFetchError();
     const demoVecs = await demoCandidateSource.getCandidates(opts);
@@ -565,7 +578,12 @@ export async function getRankedMatches(
   let candidateMatches: RankedMatch[] = [];
 
   if ('getScoredMatches' in source) {
-    candidateMatches = await source.getScoredMatches(viewerVec, { area: opts?.area, limit: opts?.limit, activityCategory: opts?.activityCategory });
+    candidateMatches = await source.getScoredMatches(viewerVec, {
+      area: opts?.area,
+      limit: opts?.limit,
+      activityCategory: opts?.activityCategory,
+      radiusMeters: radiusMetersFromProfile(user),
+    });
   } else {
     const candidateVecs = await source.getCandidates({ area: opts?.area, limit: opts?.limit });
     candidateMatches = scoreDemoCandidates(viewerVec, candidateVecs, context);

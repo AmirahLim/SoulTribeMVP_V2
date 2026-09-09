@@ -1,6 +1,7 @@
 import catalog from './onboardingQuestionCatalog.json';
 import {REPAIR_QUESTIONS,INITIATIVE_QUESTION} from './readEngine/deeperQuestions';
 import {OPENING_QUESTION} from './readEngine/emotionalQuestion';
+import { resolveOnboardingBaseline } from './onboardingBundle';
 
 type Answers = Record<string, unknown>;
 const object = (value: unknown): Answers => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Answers : {};
@@ -34,8 +35,23 @@ const baselineThreads: Record<string, [string, string]> = {
   'friendship.outings': ['interests','Outings you chose'],
 };
 
+export const ONBOARDING_EVIDENCE_FIELDS = [
+  'intent', 'clicks', 'groupChoices', 'desiredQualities', 'connectionChoice', 'planningChoice', 'outings',
+] as const;
+export const TRIBAL_PASS_EVIDENCE_KEYS = deepChoices.map(([key]) => key);
+
+/** Fields the owner read / writer may use. travelKm is matching-only and is not a reading source. */
+export function pipelineEvidenceFields(row: unknown) {
+  const sources = new Set(buildSavedAnswerRead(row).facts.map(fact => fact.source.split('.').at(-1)!));
+  return {
+    onboarding: ONBOARDING_EVIDENCE_FIELDS.filter(field => sources.has(field)),
+    tribalPass: TRIBAL_PASS_EVIDENCE_KEYS.filter(key => sources.has(key)),
+    travelKm: resolveOnboardingBaseline(row).travelKm,
+  };
+}
+
 export function buildSavedAnswerRead(row: unknown): SavedAnswerRead {
-  const saved = object(row), baseline = object(object(saved.onboarding).baselineV2), deep = object(saved.deep_profile);
+  const saved = object(row), baseline = resolveOnboardingBaseline(saved), deep = object(saved.deep_profile);
   const result: SavedAnswerRead = {notes: {}, facts: [], hasDeeperAnswers: false};
   const add = (source: string, thread: string, label: string, raw: unknown, allowed: string[], split = false) => {
     const candidates = Array.isArray(raw) ? raw : typeof raw === 'string' ? (split ? raw.split(' · ') : [raw]) : [];

@@ -164,6 +164,8 @@ export interface UserProfileData {
   q6Outings?: string[];
   q7EmotionalPacing?: string;
   q8Qualities?: string[];
+  travelKm?: number;
+  baselineV2?: Record<string, unknown>;
   avatarUrl: string;
   homeArea: string;
   bio: string;

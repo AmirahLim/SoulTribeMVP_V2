@@ -86,10 +86,10 @@ export function availableClaims(bundle:EvidenceBundle):ReadClaim[] {
 
 const profileSlots=[
   {key:'social',dimensions:['groupSize','socialVibe','groupChoices','friendshipPillars'],extra:['close-without-constant','room-with-range']},
-  {key:'connect',dimensions:['messagingStyle','supportStyle','connectionChoice','clicks','initiationChoice','q7EmotionalPacing'],extra:['thought-as-catchup','clicks-together:profile']},
+  {key:'connect',dimensions:['messagingStyle','supportStyle','connectionChoice','clicks','initiationChoice','q7EmotionalPacing','planningChoice'],extra:['thought-as-catchup','clicks-together:profile']},
   {key:'bring',dimensions:['coreValues','intent','desiredQualities'],extra:['base-and-window']},
   {key:'best',dimensions:['idealSaturday','socialVibe','groupSize','groupChoices','spontaneousTrip'],extra:['adventure-with-outline']},
-  {key:'friction',dimensions:['repairFirst','repairReturn','repairNeed','repairDiscuss','repairSpace','punctualityPref','cancellationStance'],extra:[]},
+  {key:'friction',dimensions:['repairFirst','repairReturn','repairNeed','repairDiscuss','repairSpace','punctualityPref','cancellationStance','planningChoice'],extra:[]},
   {key:'doing',dimensions:['outings','budgetPref'],extra:[]},
 ];
 const earlySlots=[
@@ -103,17 +103,20 @@ export function composeRead(bundle:EvidenceBundle,priorPhrases:string[]=[]):Comp
   if(bundle.level==='bond')return composeBond(bundle,priorPhrases);
   const candidates=availableClaims(bundle).filter(c=>validateClaim(c,bundle));
   const slots=bundle.level==='early'?earlySlots:profileSlots;
-  const sections:ReadSection[]=[],used=new Set<string>(),usedText=[...priorReadPhrases(bundle),...priorPhrases];
+  const priorText=[...priorReadPhrases(bundle),...priorPhrases];
+  const sections:ReadSection[]=[],used=new Set<string>(),selectedText:string[]=[];
+  const repeats=(texts:string[],claim:ReadClaim)=>texts.some(text=>repeatsReadText(text,claim.text)||words(text).join(' ')===words(claim.title).join(' '));
+  const usesDeeper=(claim:ReadClaim)=>claim.sourceIds.some(id=>bundle.sources.find(s=>s.id===id)?.path.startsWith('deep_profile.'));
   for(const slot of slots){
     const earlyPlacement:Record<string,string>={social:'intent',connect:'click',bring:'qualities',best:'setting',friction:'rhythm',doing:'outings'};
     const pool=candidates.filter(c=>c.slot?(bundle.level==='early'?earlyPlacement[c.slot]:c.slot)===slot.key:slot.extra.includes(c.id)||(c.sourceIds.length===1&&c.dimensions.some(d=>slot.dimensions.includes(d))))
       .sort((a,b)=>b.priority-a.priority||a.id.localeCompare(b.id));
     const selected:ReadClaim[]=[];const shapeCount=new Map<string,number>();
     for(const claim of pool){
-      if(used.has(claim.id)||usedText.some(text=>repeatsReadText(text,claim.text)||words(text).join(' ')===words(claim.title).join(' ')))continue;
+      if(used.has(claim.id)||repeats(selectedText,claim)||(!usesDeeper(claim)&&repeats(priorText,claim)))continue;
       if(selected.some(c=>c.sourceIds.some(id=>claim.sourceIds.includes(id))))continue;
       if((shapeCount.get(claim.shape)??0)>=2)continue;
-      selected.push(claim);used.add(claim.id);usedText.push(claim.text,claim.title);
+      selected.push(claim);used.add(claim.id);selectedText.push(claim.text,claim.title);
       shapeCount.set(claim.shape,(shapeCount.get(claim.shape)??0)+1);
       if(selected.length===(bundle.level==='early'&&slot.key!=='rhythm'?1:2))break;
     }

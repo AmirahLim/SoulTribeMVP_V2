@@ -27,8 +27,12 @@ export async function hydrateProfile(userId: string): Promise<void> {
   }
   if (!profile.data || !isProfileCacheAccount(userId)) return;
   const p = profile.data;
+  const baseline = answers.data?.onboarding?.baselineV2 && typeof answers.data.onboarding.baselineV2 === 'object'
+    ? answers.data.onboarding.baselineV2
+    : {};
   setUserProfile({
     ...answers.data?.onboarding,
+    ...baseline,
     ...(answers.data?.onboarding?.baselineV2 ? Object.fromEntries(
       ['trait_intent','trait_communication','trait_social_rhythm','trait_emotional','trait_experience','trait_geography'].map(key => {
         const value=(p as Record<string,any>)[key];

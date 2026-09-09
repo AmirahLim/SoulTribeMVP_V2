@@ -12,6 +12,7 @@ import { reflectionBoost, REFLECTION_RANKING_VERSION } from '../../../lib/reflec
 import { adaptRowToUserData } from '../../../lib/profileRowAdapter';
 import { toProfileVector } from '../../../lib/profileAdapter';
 import { getMatchExplanations } from '../../../lib/matchExplanationCache';
+import { MATCH_RADIUS_MAX_METERS, MATCH_RADIUS_MIN_METERS, radiusMetersFromOnboarding } from '../../../lib/onboardingSpatial';
 import {loadRosterEvidence,evidenceHash} from '../../../lib/readEngine/server';
 
 export const runtime = 'nodejs';
@@ -78,9 +79,7 @@ export async function POST(req: NextRequest) {
     const resultLimit = body.limit ?? 20;
     if (!Number.isInteger(resultLimit) || resultLimit < 1 || resultLimit > 200)
       return NextResponse.json({error:'Match limit must be an integer from 1 to 200'}, {status:400});
-    const radiusMeters = body.radiusMeters ?? 5000;
-    if (!Number.isInteger(radiusMeters) || radiusMeters < 100 || radiusMeters > 50000)
-      return NextResponse.json({error:'Match radius must be an integer from 100 to 50000 meters'}, {status:400});
+    let radiusMeters = body.radiusMeters;
     const allowedCategories = ['coffee', 'dining', 'active', 'cultural', 'nightlife', 'creative', 'intellectual'];
     if (body.activityCategory && !allowedCategories.includes(body.activityCategory)) return NextResponse.json({ error: 'Unknown activity category' }, { status: 400 });
 
@@ -92,6 +91,16 @@ export async function POST(req: NextRequest) {
       auth: { persistSession: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
+    if (radiusMeters === undefined) {
+      const { data: answerRow, error: answerErr } = await userClient.from('profile_answers').select('onboarding').eq('user_id', authUserId).maybeSingle();
+      if (answerErr) {
+        console.error('[SoulTribe API] Failed to load onboarding travel distance:', answerErr);
+        return NextResponse.json({ error: 'Failed to load onboarding travel distance' }, { status: 500 });
+      }
+      radiusMeters = radiusMetersFromOnboarding(answerRow?.onboarding);
+    }
+    if (!Number.isInteger(radiusMeters) || radiusMeters < MATCH_RADIUS_MIN_METERS || radiusMeters > MATCH_RADIUS_MAX_METERS)
+      return NextResponse.json({error:'Match radius must be an integer from 100 to 50000 meters'}, {status:400});
     const { data: localRows, error: spatialErr } = await userClient.rpc('filter_local_online_ids', {
       p_radius_meters: radiusMeters,
     });

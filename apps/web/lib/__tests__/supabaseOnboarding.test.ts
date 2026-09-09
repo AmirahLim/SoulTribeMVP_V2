@@ -33,7 +33,16 @@ describe('Transactional answer saving', () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     const [name, args] = rpc.mock.calls[0];
     expect(name).toBe('save_profile_bundle');
-    expect(args.p_answers.onboarding).toEqual(sampleData);
+    expect(args.p_answers.onboarding.baselineV2).toEqual(expect.objectContaining({
+      intent: sampleData.q1Finding,
+      clicks: sampleData.q2Feelings,
+      groupChoices: [sampleData.q3GroupSize],
+      desiredQualities: sampleData.q8Qualities,
+      planningChoice: sampleData.q5PlanningRhythm,
+      outings: sampleData.q6Outings,
+    }));
+    expect(args.p_answers.onboarding.q1Finding).toEqual(sampleData.q1Finding);
+    expect(args.p_answers.onboarding.q8Qualities).toEqual(sampleData.q8Qualities);
     expect(args.p_profile.handle).toBe('priya_sharma');
     expect(args.p_traits.user_values).toBeUndefined();
     expect(args.p_traits.trait_experience.orientation).toBeUndefined();
@@ -71,5 +80,7 @@ describe('Transactional answer saving', () => {
     const args = rpc.mock.calls[0][1];
     expect(args.p_traits).toEqual({});
     expect(args.p_answers.deep_profile.coreValues).toBe('Family');
+    expect(args.p_answers.deep_profile.groupSize).toBe('Depends');
+    expect(Object.keys(args.p_answers.deep_profile)).toEqual(['groupSize','coreValues','messagingStyle']);
   });
 });

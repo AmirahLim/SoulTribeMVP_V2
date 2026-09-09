@@ -666,6 +666,53 @@ assert.equal(
 await as(host);
 assert.ok((await db.query('select username from account.details where user_id=$1', [host])).rows[0].username);
 console.log('Passed three-box isolation, spatial-first local online filter, owner-only geo RLS, no live-ping disk writes and Realtime exclusion.');
+const bundleUser = '10000000-0000-4000-8000-0000000000aa';
+await db.exec('reset role');
+await db.query('insert into auth.users values($1)', [bundleUser]);
+await as(bundleUser);
+await db.query(`select save_profile_bundle($1,$2,'{}',null)`, [
+  { handle: 'bundle_member', display_name: 'Bundle Member', home_area: 'Singapore', birth_year: 1995 },
+  {
+    onboarding: {
+      q1Finding: ['Close circle'],
+      q2Feelings: ['Our humour just lands'],
+      q3GroupSize: 'Small circle',
+      q5PlanningRhythm: 'A few days',
+      q6Outings: ['Specialty Coffee'],
+      q8Qualities: ['Reliable'],
+      connectionChoice: 'About once a week',
+      travelKm: 10,
+    },
+  },
+]);
+const bundled = (await db.query('select onboarding from profile_answers where user_id=$1', [bundleUser])).rows[0].onboarding;
+assert.deepEqual(bundled.baselineV2.intent, ['Close circle']);
+assert.deepEqual(bundled.baselineV2.desiredQualities, ['Reliable']);
+assert.equal(bundled.baselineV2.connectionChoice, 'About once a week');
+assert.equal(bundled.baselineV2.planningChoice, 'A few days');
+assert.deepEqual(bundled.baselineV2.outings, ['Specialty Coffee']);
+assert.equal(bundled.baselineV2.travelKm, 10);
+assert.deepEqual(
+  (await db.query("select question_id from read_answer_sources where user_id=$1 and question_id like 'friendship.%' order by question_id", [bundleUser])).rows.map((row) => row.question_id),
+  ['friendship.clicks', 'friendship.contact', 'friendship.intent', 'friendship.outings', 'friendship.planning', 'friendship.qualities', 'friendship.setting'],
+);
+await db.query(`select save_profile_bundle(null,$1,'{}',null)`, [{deep_profile:{coreValues:'Family',messagingStyle:'Random thoughts'},completed_categories:[6]}]);
+await db.query(`select save_profile_bundle(null,$1,'{}',null)`, [{deep_profile:{groupSize:'Depends'},completed_categories:[1]}]);
+const mergedAnswers = (await db.query('select deep_profile,completed_categories from profile_answers where user_id=$1', [bundleUser])).rows[0];
+assert.equal(mergedAnswers.deep_profile.coreValues, 'Family');
+assert.equal(mergedAnswers.deep_profile.messagingStyle, 'Random thoughts');
+assert.equal(mergedAnswers.deep_profile.groupSize, 'Depends');
+assert.deepEqual(mergedAnswers.completed_categories, [1, 6]);
+assert.deepEqual(
+  (await db.query("select dimension from read_answer_sources where user_id=$1 and question_id like 'tribal.%' order by dimension", [bundleUser])).rows.map((row) => row.dimension),
+  ['coreValues', 'groupSize', 'messagingStyle'],
+);
+await db.query(`select save_profile_bundle(null,$1,'{}',null)`, [{deep_profile:{coreValues:''}}]);
+assert.equal((await db.query('select deep_profile from profile_answers where user_id=$1', [bundleUser])).rows[0].deep_profile.coreValues, '');
+assert.equal((await db.query("select count(*)::int n from read_answer_sources where user_id=$1 and dimension='coreValues'", [bundleUser])).rows[0].n, 0);
+assert.equal((await db.query('select deep_profile from profile_answers where user_id=$1', [bundleUser])).rows[0].deep_profile.groupSize, 'Depends');
+console.log('Passed save_profile_bundle packaging of all eight onboarding answers into baselineV2 and read sources.');
+console.log('Passed merge of partial Tribal Pass saves without dropping earlier categorical answers.');
 // Account deletion must not resurrect a repair projection during cascading deletes.
 await db.exec('reset role');
 await db.query("insert into profile_answers(user_id,onboarding,deep_profile) values($1,'{}',$2)",[observers[4],{repairFirst:'Ask how they saw it',repairNeed:'A clear apology'}]);

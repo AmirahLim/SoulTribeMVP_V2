@@ -2,6 +2,7 @@ import { getSupabaseBrowserClient } from './supabase';
 import type { DeepProfileAnswers } from './userStore';
 import { ONBOARDING_INTEREST_NODES } from '@soul-tribe/core';
 import { suppliedTraitFields } from './savedAnswerRead';
+import { packageOnboardingForBundle } from './onboardingBundle';
 
 export interface OnboardingDataToSave {
   displayName: string;
@@ -85,7 +86,7 @@ export async function saveOnboardingToSupabase(
       avatar_url: data.avatarUrl || null,
       bio: data.bio || null,
     },
-    { onboarding: data },
+    { onboarding: packageOnboardingForBundle(data) },
     {
       trait_intent: { intents: data.q1Finding },
       trait_communication: {
@@ -141,6 +142,12 @@ export async function saveUserInterestsAndValues(
 ): Promise<SaveResult> {
   return saveBundle(userId, null, {}, {}, interestIds(outings));
 }
+function deepProfileSavePatch(d: DeepProfileAnswers) {
+  // Omit undefined keys so a partial Tribal Pass save cannot replace the stored object.
+  // Empty string remains so a cleared chip can withdraw that field.
+  return Object.fromEntries(Object.entries(d).filter(([, value]) => value !== undefined));
+}
+
 export async function saveDeeperPassToSupabase(
   userId: string,
   d: DeepProfileAnswers,
@@ -150,7 +157,7 @@ export async function saveDeeperPassToSupabase(
   return saveBundle(
     userId,
     null,
-    { deep_profile: d, completed_categories: [...new Set(categories)] },
+    { deep_profile: deepProfileSavePatch(d), completed_categories: [...new Set(categories)] },
     suppliedTraitFields({
       trait_personality: {
         serious_playful: d.seriousPlayful,
