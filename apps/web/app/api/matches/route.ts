@@ -74,10 +74,32 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const resultLimit = body.limit ?? 20;
+    if (!Number.isInteger(resultLimit) || resultLimit < 1 || resultLimit > 200)
+      return NextResponse.json({error:'Match limit must be an integer from 1 to 200'}, {status:400});
+    const radiusMeters = body.radiusMeters ?? 5000;
+    if (!Number.isInteger(radiusMeters) || radiusMeters < 100 || radiusMeters > 50000)
+      return NextResponse.json({error:'Match radius must be an integer from 100 to 50000 meters'}, {status:400});
+    const allowedCategories = ['coffee', 'dining', 'active', 'cultural', 'nightlife', 'creative', 'intellectual'];
+    if (body.activityCategory && !allowedCategories.includes(body.activityCategory)) return NextResponse.json({ error: 'Unknown activity category' }, { status: 400 });
+
     // 2. Secret Key Client bypassing RLS (SERVER ONLY)
     const adminClient = createClient(supabaseUrl, secretKey, {
       auth: { persistSession: false },
     });
+    const userClient = createClient(supabaseUrl, publishableKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: localRows, error: spatialErr } = await userClient.rpc('filter_local_online_ids', {
+      p_radius_meters: radiusMeters,
+    });
+    if (spatialErr) {
+      console.error('[SoulTribe API] Spatial filter failed:', spatialErr);
+      return NextResponse.json({ error: 'Failed to apply location filter' }, { status: 500 });
+    }
+    const localIds = [...new Set((localRows ?? []).map((row: { user_id: string }) => row.user_id).filter((id: string) => id && id !== authUserId))];
 
     const profileSelection = `
         id,
@@ -105,7 +127,7 @@ export async function POST(req: NextRequest) {
         user_interests (*, interest_nodes (name,path)),
         user_values (*)
       `;
-    // These authenticated reads are independent: avoid serial database round trips.
+    const profileIds = [authUserId, ...localIds];
     const [
       {data:blocks,error:blockErr}, {data:reports,error:reportErr},
       {data:dbProfiles,error:fetchErr}, {data:viewerRow,error:viewerError},
@@ -113,7 +135,9 @@ export async function POST(req: NextRequest) {
     ] = await Promise.all([
       adminClient.from('blocks').select('blocker_id,blocked_id').or(`blocker_id.eq.${authUserId},blocked_id.eq.${authUserId}`),
       adminClient.from('reports').select('reporter_id,reported_id').or(`reporter_id.eq.${authUserId},reported_id.eq.${authUserId}`),
-      adminClient.from('profiles').select(profileSelection).eq('status','active').limit(200),
+      localIds.length === 0
+        ? Promise.resolve({ data: [] as any[], error: null })
+        : adminClient.from('profiles').select(profileSelection).in('id', profileIds),
       adminClient.from('profiles').select(profileSelection).eq('id',authUserId).eq('status','active').maybeSingle(),
       adminClient.from('recommendation_preferences').select('use_reflections').eq('user_id',authUserId).maybeSingle(),
     ]);
@@ -146,14 +170,10 @@ export async function POST(req: NextRequest) {
       r.reporter_id === authUserId ? r.reported_id : r.reporter_id
     );
 
-    const candidatesPool = nonDemoProfiles.filter((p) => p.id !== authUserId);
+    const candidatesPool = nonDemoProfiles.filter(
+      (p) => p.id !== authUserId && p.status === 'active' && localIds.includes(p.id),
+    );
 
-    const body = await req.json().catch(() => ({}));
-    const resultLimit = body.limit ?? 20;
-    if (!Number.isInteger(resultLimit) || resultLimit < 1 || resultLimit > 200)
-      return NextResponse.json({error:'Match limit must be an integer from 1 to 200'}, {status:400});
-    const allowedCategories = ['coffee', 'dining', 'active', 'cultural', 'nightlife', 'creative', 'intellectual'];
-    if (body.activityCategory && !allowedCategories.includes(body.activityCategory)) return NextResponse.json({ error: 'Unknown activity category' }, { status: 400 });
     const context: MatchContext = {
       allowProvisionalRanking: true,
       activity_category: body.activityCategory,
@@ -268,6 +288,7 @@ export async function POST(req: NextRequest) {
       actor_id: authUserId, event_type: 'recommendations_generated', engine_version: REFLECTION_RANKING_VERSION,
       payload: { count: returnedMatches.length, profiles_fetched:dbProfiles.length,non_demo:nonDemoProfiles.length,
         after_self_exclusion:candidates.length,eligible:rankedMatches.length,limit:resultLimit,
+        spatial_pool: localIds.length, radius_meters: radiusMeters,
         reflections_enabled: Boolean(learningPreference?.use_reflections),timing } });
     if(auditError) {
       console.error('[SoulTribe] matching timing audit failed',{code:auditError.code,message:auditError.message});

@@ -4,7 +4,7 @@ import { getRankedMatches, RankedMatch } from '../matching';
 import { POST } from '../../app/api/matches/route';
 import { NextRequest } from 'next/server';
 import { evaluateGates } from '@soul-tribe/core';
-const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[]}));
+const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],rpcIds:null as string[] | null,calls:[] as string[]}));
 
 vi.mock('../supabase', () => ({
   checkIsSupabaseConfigured: () => true,
@@ -23,6 +23,13 @@ vi.mock('@supabase/supabase-js', () => {
     createClient: vi.fn((url: string, key: string) => {
       const isAnonKey = key.startsWith('sb_publishable') || key.includes('anon');
       return {
+        rpc: async (name: string) => {
+          cacheTestState.calls.push(`rpc:${name}:${isAnonKey ? 'user' : 'admin'}`);
+          if (name !== 'filter_local_online_ids') return { data: null, error: new Error('unknown rpc') };
+          if (cacheTestState.rpcIds) return { data: cacheTestState.rpcIds.map((user_id: string) => ({ user_id })), error: null };
+          const ids = ['candidate-alice', 'blocked-user-99', ...Array.from({ length: cacheTestState.extra }, (_, i) => 'extra-candidate-' + i)];
+          return { data: ids.map((user_id) => ({ user_id })), error: null };
+        },
         auth: {
           getUser: vi.fn(async (token: string) => {
             if (token === 'valid_token') {
@@ -63,6 +70,7 @@ vi.mock('@supabase/supabase-js', () => {
             };
           }
           if (table === 'profiles') {
+            cacheTestState.calls.push('profiles');
             let rows: any[] = [
                       {
                         id: 'viewer-1',
@@ -124,7 +132,7 @@ vi.mock('@supabase/supabase-js', () => {
                     ];
             rows.push(...Array.from({length:cacheTestState.extra},(_,i)=>({...rows[1],id:'extra-candidate-'+i})));
             const q: any = {
-              in: async (_key:string,ids:string[])=>({data:rows.filter(r=>ids.includes(r.id)),error:null}),
+              in: async (_key:string,ids:string[])=>({data:rows.filter(r=>ids.includes(r.id)).map(r=>({...r,profile_version:1,explanation_revision:0})),error:null}),
               eq: (key: string, value: any) => { rows = rows.filter(r => r[key] === value).map(r=>({...r,profile_version:1,explanation_revision:0})); return q; },
               limit: async () => ({ data: rows, error: null }),
               maybeSingle: async () => ({ data: rows[0] || null, error: null }),
@@ -150,7 +158,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
   const oldEnv = process.env;
 
   beforeEach(() => {
-    cacheTestState.extra=0;cacheTestState.writes=[];
+    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.rpcIds=null;cacheTestState.calls=[];
     process.env = {
       ...oldEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -370,6 +378,26 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     expect(res.headers.get('X-Match-Generated')).toBe('2');
     expect(res.headers.get('Server-Timing')).toContain('scoring;dur=');
   });
+  it('filters spatially before loading profiles and scores only that pool', async () => {
+    cacheTestState.rpcIds = [];
+    const empty = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' },
+    }));
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual([]);
+    expect(cacheTestState.calls[0]).toBe('rpc:filter_local_online_ids:user');
+    expect(cacheTestState.calls.filter((call) => call === 'profiles').length).toBe(1);
+
+    cacheTestState.calls = [];
+    cacheTestState.rpcIds = ['candidate-alice'];
+    const local = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' },
+    }));
+    const json = await local.json();
+    expect(json.map((row: { id: string }) => row.id)).toEqual(['candidate-alice']);
+    expect(cacheTestState.calls[0]).toBe('rpc:filter_local_online_ids:user');
+  });
+
   it('7. Unconfigured env variables return 500 naming missing variables', async () => {
     delete process.env.SUPABASE_SECRET_KEY;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;

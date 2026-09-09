@@ -15,6 +15,8 @@ npm run dev
 
 Configure the existing app environment using `apps/web/.env.example` if available. The app requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Server matching requires `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`; never expose either through a public environment variable. Unsplash image search optionally uses `UNSPLASH_ACCESS_KEY`.
 
+Matching filters currently-online members by distance (`filter_local_online_ids`) before scoring traits. See `docs/three-box-foundation.md`.
+
 ## Verification
 
 ```sh

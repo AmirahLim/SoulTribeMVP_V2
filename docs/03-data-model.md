@@ -2,6 +2,8 @@
 
 Supabase / Postgres. Every table has RLS enabled. Migrations in `supabase/migrations/`.
 
+Live scaling layout (account / behavior / geo isolation, spatial-first matching, broadcast-only live pings) is defined in `docs/three-box-foundation.md` and `20261009000000_three_box_foundation.sql`. Do not put live coordinates on `profiles` or expose another user's point through the Data API.
+
 Design principle: **typed columns for anything the matching engine reads** (fast, indexable,
 type-safe), **jsonb for open-ended extras**. Do not put the trait vector in one giant jsonb blob
 — you will need to query and audit it.
