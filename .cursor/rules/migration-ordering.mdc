@@ -1,0 +1,14 @@
+---
+description: Never apply a live migration until the commit is pushed and CI is green
+alwaysApply: true
+---
+
+# Migration ordering
+
+Do not apply any migration, schema change, or SQL that creates or replaces database objects on a live Supabase project — including `apply_migration` and `execute_sql` that mutates schema — until `npm run preflight:migration` exits 0.
+
+That script refuses when the migration is uncommitted, when `HEAD` is ahead of the remote, or when no passing `Verify MVP` run exists for this exact commit.
+
+A database ahead of committed code cannot be explained, reviewed or rebuilt. Four commits sat unpushed while their migrations were applied live; V1 drifted the same way from the other direction. This is a gate, not a preference.
+
+Automatic Actions triggers are not firing, so a push is not a green run. Dispatch with `gh workflow run verify.yml --ref main` and wait.

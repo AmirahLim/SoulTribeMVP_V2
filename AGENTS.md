@@ -49,7 +49,7 @@ Automatic Actions triggers are not currently firing on this repository, so CI mu
 
 ## Anti-fabrication is enforced, not requested
 
-`npm run lint:fabrication` fails on new `as any`, suppressed type or lint checks, `!` non-null assertions and `|| <literal>` fallbacks inside `packages/core`, `apps/web/app/api` and the matching libraries. It runs in CI, so the rule does not need restating in a prompt to hold.
+`npm run lint:fabrication` fails on new `as any`, suppressed type or lint checks, `!` non-null assertions and `|| <literal>` fallbacks inside `packages/core`, `apps/web/app/api` and the matching libraries (`matching.ts`, the match-* helpers, live presence, and the profile adapters that feed the scorer). It runs in CI, so the rule does not need restating in a prompt to hold.
 
 A `|| 'literal'` in these paths substitutes an invented value for a missing one, and once rendered a member cannot tell it from something they actually answered. `home_area || 'Singapore'` claims a location nobody entered; `|| 'Conversational resonance'` writes an explanation their answers do not support.
 

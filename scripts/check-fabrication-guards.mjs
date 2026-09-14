@@ -34,12 +34,17 @@ const BASELINE = join(ROOT, 'scripts', 'fabrication-baseline.json');
 const SCOPE = [
   'packages/core',
   'apps/web/app/api',
+  // Matching libs: the scorer, the pair-explanation cache, and the adapters that
+  // turn a profile row into the vector matching reads. profileAdapter is where
+  // `home_area || 'Singapore'` currently lives — the example AGENTS.md names.
   'apps/web/lib/matching.ts',
   'apps/web/lib/matchExplanationCache.ts',
   'apps/web/lib/matchListState.ts',
   'apps/web/lib/livePresence.ts',
   'apps/web/lib/onboardingSpatial.ts',
   'apps/web/lib/reflectionRanking.ts',
+  'apps/web/lib/profileAdapter.ts',
+  'apps/web/lib/profileRowAdapter.ts',
 ];
 
 // Fixtures legitimately build partial objects with `as any`; asserting on a fixture
@@ -94,7 +99,12 @@ function scan(file) {
 
 const found = {};
 for (const target of SCOPE) {
-  for (const file of walk(target)) {
+  const files = walk(target);
+  if (!files.length) {
+    console.error(`Anti-fabrication check has no files under ${target}. Coverage silently dropped.`);
+    process.exit(1);
+  }
+  for (const file of files) {
     const counts = scan(file);
     if (Object.keys(counts).length) found[relative(ROOT, file)] = counts;
   }

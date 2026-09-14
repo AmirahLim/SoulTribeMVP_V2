@@ -52,5 +52,12 @@
   "apps/web/lib/matching.ts": {
     "asAny": 5,
     "literalFallback": 8
+  },
+  "apps/web/lib/profileAdapter.ts": {
+    "asAny": 52,
+    "literalFallback": 6
+  },
+  "apps/web/lib/profileRowAdapter.ts": {
+    "literalFallback": 1
   }
 }
