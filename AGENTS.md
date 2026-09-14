@@ -49,8 +49,6 @@ Automatic Actions triggers are not currently firing on this repository, so CI mu
 
 ## Anti-fabrication is enforced, not requested
 
-`npm run lint:fabrication` fails on new `as any`, suppressed type or lint checks, `!` non-null assertions and `|| <literal>` fallbacks inside `packages/core`, `apps/web/app/api` and the matching libraries (`matching.ts`, the match-* helpers, live presence, and the profile adapters that feed the scorer). It runs in CI, so the rule does not need restating in a prompt to hold.
+`npm run lint:fabrication` runs in CI. It hard-bans `@ts-ignore` and `@ts-expect-error` (currently zero) and ratchets `as any` / `: any`, `|| 'literal'` and `|| <number>` against `scripts/fabrication-baseline.json`, inside `packages/core`, `apps/web/app/api`, `matching.ts`, `profileAdapter.ts` and `profileRowAdapter.ts`. It fails only on an increase. A legitimate reduction is printed; the baseline is never lowered automatically.
 
 A `|| 'literal'` in these paths substitutes an invented value for a missing one, and once rendered a member cannot tell it from something they actually answered. `home_area || 'Singapore'` claims a location nobody entered; `|| 'Conversational resonance'` writes an explanation their answers do not support.
-
-Existing violations are recorded in `scripts/fabrication-baseline.json` and the check fails only on increases, because several are load-bearing and removing them is a product decision about what an absent value should show, not a mechanical edit. Burn the baseline down and re-record it with `npm run lint:fabrication -- --update`; never raise a count to make the check pass.
