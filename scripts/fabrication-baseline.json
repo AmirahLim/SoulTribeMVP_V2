@@ -1,0 +1,56 @@
+{
+  "packages/core/explain/generator.ts": {
+    "literalFallback": 7
+  },
+  "packages/core/explain/markers.ts": {
+    "asAny": 2,
+    "literalFallback": 1
+  },
+  "packages/core/explain/phrases.ts": {
+    "literalFallback": 3
+  },
+  "packages/core/explain/selfProfile.ts": {
+    "asAny": 2,
+    "literalFallback": 6
+  },
+  "packages/core/explain/socialSynthesis.ts": {
+    "nonNullAssertion": 2
+  },
+  "packages/core/matching/engine.ts": {
+    "nonNullAssertion": 1
+  },
+  "packages/core/matching/gates.ts": {
+    "literalFallback": 2
+  },
+  "packages/core/telemetry/sink.ts": {
+    "asAny": 2
+  },
+  "apps/web/app/api/avatar/[...path]/route.ts": {
+    "literalFallback": 1,
+    "nonNullAssertion": 1
+  },
+  "apps/web/app/api/avatar/route.ts": {
+    "literalFallback": 1,
+    "nonNullAssertion": 1
+  },
+  "apps/web/app/api/bond/route.ts": {
+    "asAny": 1,
+    "literalFallback": 5
+  },
+  "apps/web/app/api/matches/route.ts": {
+    "asAny": 1,
+    "literalFallback": 4,
+    "nonNullAssertion": 5
+  },
+  "apps/web/app/api/me/read/route.ts": {
+    "asAny": 1,
+    "literalFallback": 9
+  },
+  "apps/web/app/api/outings/search-image/route.ts": {
+    "literalFallback": 1
+  },
+  "apps/web/lib/matching.ts": {
+    "asAny": 5,
+    "literalFallback": 8
+  }
+}

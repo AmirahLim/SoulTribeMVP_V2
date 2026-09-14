@@ -38,3 +38,19 @@ Do not silently backfill legacy browser profiles: sample answers had uncertain p
 Full original answers belong in `profile_answers`, not publicly readable `profiles`.
 Run `npm run typecheck`, `npm test`, and `npm run test:db`. Database security tests use local PGlite with Supabase auth/storage schema shims; staging Supabase and real concurrent-client checks remain a release gate.
 Do not claim production verification from local tests. Keep deployment, historical data remediation and open product decisions explicit in the implementation report.
+
+## Never let the database lead the repo
+
+No migration runs against a live database until the commit containing it is pushed and CI is green for that exact commit. Check with `npm run preflight:migration`, which refuses when the migration is uncommitted, when `HEAD` is ahead of the remote, or when no passing `Verify MVP` run exists for `HEAD`.
+
+A database ahead of committed code cannot be explained, reviewed or rebuilt: the repo describes a schema that does not exist yet, and the schema contains objects no commit accounts for. This has happened in both directions already, so it is a gate rather than a preference.
+
+Automatic Actions triggers are not currently firing on this repository, so CI must be dispatched by hand with `gh workflow run verify.yml --ref main`. Until that is fixed, a green run is never implied by a push.
+
+## Anti-fabrication is enforced, not requested
+
+`npm run lint:fabrication` fails on new `as any`, suppressed type or lint checks, `!` non-null assertions and `|| <literal>` fallbacks inside `packages/core`, `apps/web/app/api` and the matching libraries. It runs in CI, so the rule does not need restating in a prompt to hold.
+
+A `|| 'literal'` in these paths substitutes an invented value for a missing one, and once rendered a member cannot tell it from something they actually answered. `home_area || 'Singapore'` claims a location nobody entered; `|| 'Conversational resonance'` writes an explanation their answers do not support.
+
+Existing violations are recorded in `scripts/fabrication-baseline.json` and the check fails only on increases, because several are load-bearing and removing them is a product decision about what an absent value should show, not a mechanical edit. Burn the baseline down and re-record it with `npm run lint:fabrication -- --update`; never raise a count to make the check pass.

@@ -11,6 +11,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint:migrations
+      - run: npm run lint:fabrication
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:db
