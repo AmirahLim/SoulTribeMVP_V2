@@ -99,14 +99,14 @@ const SG_TRAVEL_TIME_MATRIX: Record<string, Record<string, number>> = {
   },
 };
 
-export function getTravelTimeMinutes(areaA: string, areaB: string): number {
-  if (areaA === areaB) return 5;
-  if (SG_TRAVEL_TIME_MATRIX[areaA]?.[areaB]) {
-    return SG_TRAVEL_TIME_MATRIX[areaA][areaB];
-  }
-  if (SG_TRAVEL_TIME_MATRIX[areaB]?.[areaA]) {
-    return SG_TRAVEL_TIME_MATRIX[areaB][areaA];
-  }
-  // Default estimate for unlisted planning area pairs in Singapore
-  return 30;
+export function getTravelTimeMinutes(areaA: string, areaB: string): number | null {
+  const a = areaA.trim();
+  const b = areaB.trim();
+  if (!a || !b) return null;
+  if (a === b) return 5;
+  const direct = SG_TRAVEL_TIME_MATRIX[a]?.[b];
+  if (typeof direct === 'number') return direct;
+  const reverse = SG_TRAVEL_TIME_MATRIX[b]?.[a];
+  if (typeof reverse === 'number') return reverse;
+  return null;
 }

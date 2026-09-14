@@ -356,6 +356,7 @@ export function scoreGeography(vecA: ProfileVector, vecB: ProfileVector): number
   if (!gA || !gB || !gA.home_area || !gB.home_area) return null;
 
   const travelMinutes = getTravelTimeMinutes(gA.home_area, gB.home_area);
+  if (travelMinutes == null) return null;
   const radA = gA.radius_minutes?.coffee ?? 30;
   const radB = gB.radius_minutes?.coffee ?? 30;
   const minRad = Math.min(radA, radB);

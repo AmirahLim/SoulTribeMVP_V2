@@ -17,6 +17,32 @@ import {loadRosterEvidence,evidenceHash} from '../../../lib/readEngine/server';
 
 export const runtime = 'nodejs';
 
+const LOCAL_POOL_CAP = 200;
+
+function readUserId(row: unknown): string | null {
+  if (typeof row !== 'object' || row === null || !('user_id' in row)) return null;
+  const id = row.user_id;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
+function uniqueUserIds(rows: unknown, excludeId: string): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  if (!Array.isArray(rows)) return ids;
+  for (const row of rows) {
+    const id = readUserId(row);
+    if (!id || id === excludeId || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function isMissingRpc(error: { code?: string; message?: string }): boolean {
+  if (error.code === 'PGRST202') return true;
+  return /could not find the function|schema cache/i.test(error.message ?? '');
+}
+
 function getFitLabel(
   rankScore: number,
   isProvisional?: boolean,
@@ -108,7 +134,27 @@ export async function POST(req: NextRequest) {
       console.error('[SoulTribe API] Spatial filter failed:', spatialErr);
       return NextResponse.json({ error: 'Failed to apply location filter' }, { status: 500 });
     }
-    const localIds = [...new Set((localRows ?? []).map((row: { user_id: string }) => row.user_id).filter((id: string) => id && id !== authUserId))];
+    const spatialIds = uniqueUserIds(localRows, authUserId);
+    const areaIds: string[] = [];
+    if (spatialIds.length < LOCAL_POOL_CAP) {
+      const { data: areaRows, error: areaErr } = await userClient.rpc('filter_local_area_ids');
+      if (areaErr) {
+        if (!isMissingRpc(areaErr)) {
+          console.error('[SoulTribe API] Area filter failed:', areaErr);
+          return NextResponse.json({ error: 'Failed to apply area filter' }, { status: 500 });
+        }
+        console.warn('[SoulTribe API] Area filter unavailable until the presence/area migration is applied:', areaErr.message);
+      } else {
+        const seen = new Set(spatialIds);
+        for (const id of uniqueUserIds(areaRows, authUserId)) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          areaIds.push(id);
+          if (seen.size >= LOCAL_POOL_CAP) break;
+        }
+      }
+    }
+    const localIds = [...spatialIds, ...areaIds];
 
     // Every path that returns matches records what it saw, including the paths that
     // return none. An empty result with no audit row is indistinguishable from a
@@ -117,19 +163,27 @@ export async function POST(req: NextRequest) {
       const {error:auditError} = await adminClient.from('interaction_events').insert({
         actor_id: authUserId, event_type: 'recommendations_generated',
         engine_version: REFLECTION_RANKING_VERSION,
-        payload: {spatial_pool: localIds.length, radius_meters: radiusMeters, limit: resultLimit, ...payload},
+        payload: {
+          spatial_pool: spatialIds.length, area_pool: areaIds.length, local_pool: localIds.length,
+          radius_meters: radiusMeters, limit: resultLimit, ...payload,
+        },
       });
       if (auditError) {
         console.error('[SoulTribe] matching timing audit failed',{code:auditError.code,message:auditError.message});
         throw new Error(auditError.message);
       }
     };
+    const emptyHeaders = (emptyReason: string) => ({
+      'Cache-Control':'no-store',
+      'X-Match-Eligible':'0',
+      'X-Match-Empty-Reason':emptyReason,
+      'X-Match-Pool':String(localIds.length),
+    });
     const emptyResult = async (emptyReason: string, profilesFetched: number) => {
       await writeAudit({count:0, profiles_fetched:profilesFetched, non_demo:0, after_self_exclusion:0,
         eligible:0, empty_reason:emptyReason, reflections_enabled:false,
         timing:{total_ms:performance.now()-requestStarted}});
-      return NextResponse.json([], { status: 200, headers:{'Cache-Control':'no-store',
-        'X-Match-Eligible':'0','X-Match-Empty-Reason':emptyReason} });
+      return NextResponse.json([], { status: 200, headers: emptyHeaders(emptyReason) });
     };
 
     const profileSelection = `
@@ -184,10 +238,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: fetchErr.message }, { status: 500 });
     }
 
+    if (viewerError) return NextResponse.json({ error: 'Unable to load your profile' }, { status: 503 });
+
     if (!dbProfiles || dbProfiles.length === 0) {
-      // An empty spatial pool short-circuits the profile fetch, so this covers both
-      // "nobody nearby was online" and "the nearby ids had no profile rows".
-      return emptyResult(localIds.length === 0 ? 'empty_spatial_pool' : 'no_candidate_profiles', 0);
+      // An empty local pool short-circuits the candidate fetch, so this covers
+      // both "nobody nearby or in this area" and "the local ids had no profile rows".
+      if (localIds.length === 0) {
+        const originArea = typeof viewerRow?.home_area === 'string' ? viewerRow.home_area.trim() : '';
+        return emptyResult(originArea ? 'empty_local_pool' : 'no_match_origin', 0);
+      }
+      return emptyResult('no_candidate_profiles', 0);
     }
 
     // Exclude demo candidates server side
@@ -215,7 +275,6 @@ export async function POST(req: NextRequest) {
     };
 
     // 3. Find viewer profile
-    if (viewerError) return NextResponse.json({ error: 'Unable to load your profile' }, { status: 503 });
     if (!viewerRow) {
       return emptyResult('viewer_profile_missing', dbProfiles.length);
     }
@@ -336,6 +395,7 @@ export async function POST(req: NextRequest) {
       'Server-Timing':`scoring;dur=${scoringMs.toFixed(2)}, explanation;dur=${metrics.explanation_ms.toFixed(2)}, cache_read;dur=${metrics.cache_read_ms.toFixed(2)}, cache_write;dur=${metrics.cache_write_ms.toFixed(2)}, total;dur=${totalMs.toFixed(2)}`,
       'X-Match-Cache-Hits':String(metrics.cache_hits),'X-Match-Generated':String(metrics.generated),
       'X-Match-Eligible':String(rankedMatches.length),
+      'X-Match-Pool':String(localIds.length),
     } });
   } catch (err: any) {
     console.error('[SoulTribe API] Exception during match scoring:', err);

@@ -21,7 +21,7 @@ describe('Cold Start Wiring Tests — explorationBoost & nextBestQuestions', () 
       id: 'viewer-user-100',
       displayName: 'Viewer',
       avatarUrl: '',
-      homeArea: 'Singapore',
+      homeArea: 'Tiong Bahru',
       bio: '',
       passCompletionPct: 80,
       deepProfile: { mbti: 'INFJ' },
@@ -76,7 +76,7 @@ describe('Cold Start Wiring Tests — explorationBoost & nextBestQuestions', () 
     const incompleteUser: UserProfileData = {
       displayName: 'Incomplete User',
       avatarUrl: '',
-      homeArea: 'Singapore',
+      homeArea: 'Tiong Bahru',
       bio: '',
       passCompletionPct: 20,
       deepProfile: {}, // 0 questions answered
@@ -98,7 +98,7 @@ describe('Cold Start Wiring Tests — explorationBoost & nextBestQuestions', () 
     const completeUser: UserProfileData = {
       displayName: 'Complete User',
       avatarUrl: '',
-      homeArea: 'Singapore',
+      homeArea: 'Tiong Bahru',
       bio: 'Full bio filled out completely',
       passCompletionPct: 100,
       deepProfile: {

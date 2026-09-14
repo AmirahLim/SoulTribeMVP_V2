@@ -1,15 +1,16 @@
 /**
- * Matching can return nothing for several unrelated reasons: the live location
- * write failed, the write worked and nobody is nearby, nobody nearby was a fit,
- * or the request itself broke. A member can only act on the difference if the
- * screen names it, so one blank list must never stand in for all of them.
+ * Matching can return nothing for several unrelated reasons: neither a live
+ * location nor a home area could be used as an origin, the measured local pool
+ * was empty, nobody in that pool was a fit, or the request itself broke. A
+ * member can only act on the difference if the screen names it, so one blank
+ * list must never stand in for all of them.
  *
  * The copy lives here rather than inline in the pages so that both surfaces read
  * identically and so that a test can assert against the shipped words instead of
  * restating them.
  */
 
-/** Thrown when presence could not be established, so the pool is unknown rather than empty. */
+/** Thrown when matching had no live point and no home_area, so the pool is unknown rather than empty. */
 export class LocationUnavailableError extends Error {
   constructor(message = 'Location access is needed to find people near you.') {
     super(message);
@@ -43,7 +44,7 @@ export const MATCH_LIST_COPY: Record<MatchListNoticeKind, MatchListNoticeCopy> =
   },
   nobodyInRange: {
     headline: 'Nobody is in range yet',
-    body: 'Your location came through and nobody nearby is around at the moment. This is worth checking again a little later.',
+    body: 'Nobody nearby or in your area is around at the moment. This is worth checking again a little later.',
     retryLabel: 'Check again',
     tone: 'quiet',
   },

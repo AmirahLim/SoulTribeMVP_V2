@@ -13,7 +13,7 @@ Keep backend data in three isolated Postgres schemas. Do not mix their write pat
 
 ## Rules
 
-1. Spatial filter first. Call `filter_local_online_ids` (PostGIS / distance) on currently online local members, then score behavior on that small pool. Do not scan or score the global member table.
+1. Spatial filter first. Call `filter_local_online_ids` (PostGIS / distance) on currently online local members (`is_online` and `updated_at` within 15 minutes). If that pool is under 200, fill from `filter_local_area_ids` (same `home_area` label, IDs only). Score behavior on that combined pool. Do not write home-area centroids into `geo.live_presence`. Do not scan or score the global member table.
 2. Live outing pings use Supabase Realtime **broadcast** channels in memory. Do not insert temporary live pings into `outing_notifications` or any other durable table.
 3. RLS on geo is owner-only. Never add `geo` tables to `supabase_realtime`. Never `select` another user's row from `geo.live_presence` in app code, including service-role matching.
 
@@ -21,6 +21,6 @@ Keep backend data in three isolated Postgres schemas. Do not mix their write pat
 // ❌ BAD — score everyone, then filter
 const people = await admin.from('profiles').select('*').limit(150000);
 
-// ✅ GOOD — distance/online IDs first, then traits for those IDs
+// ✅ GOOD — currently-online IDs first, then same-area IDs if the pool is short, then traits for those IDs
 const { data } = await userClient.rpc('filter_local_online_ids', { p_radius_meters: 5000 });
 ```

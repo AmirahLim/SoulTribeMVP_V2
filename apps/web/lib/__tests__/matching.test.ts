@@ -19,7 +19,7 @@ describe('Part 5 — Matching Service Tests', () => {
   const fullUser: UserProfileData & Record<string, any> = {
     displayName: 'Priya Sharma',
     avatarUrl: '',
-    homeArea: 'Singapore',
+    homeArea: 'Tiong Bahru',
     bio: 'Loves coffee and craft.',
     passCompletionPct: 100,
     birthYear: 1995,
@@ -84,11 +84,20 @@ describe('Part 5 — Matching Service Tests', () => {
   });
 
   it('8. Results respect limit option', async () => {
+    const pool = Array.from({ length: 8 }, (_, i) => ({
+      ...DEMO_PROFILES[0],
+      profile: { ...DEMO_PROFILES[0].profile, id: `limit-cand-${i}`, display_name: `Limit Cand ${i}` },
+      isDemo: true,
+    }));
+    setCandidateSource({ async getCandidates() { return pool; } });
+
     const matches3 = await getRankedMatches(fullUser, { limit: 3 });
     assert.strictEqual(matches3.length, 3);
 
     const matches5 = await getRankedMatches(fullUser, { limit: 5 });
     assert.strictEqual(matches5.length, 5);
+
+    setCandidateSource(demoCandidateSource);
   });
 
   it('9. clickText differs between candidates (proves it is generated, not static)', async () => {
@@ -105,7 +114,7 @@ describe('Part 5 — Matching Service Tests', () => {
     const thinUser: UserProfileData = {
       displayName: 'Thin User',
       avatarUrl: '',
-      homeArea: 'Singapore',
+      homeArea: 'Tiong Bahru',
       bio: '',
       passCompletionPct: 10,
       deepProfile: {}, // Thin profile with no answers
@@ -152,7 +161,7 @@ describe('Small Community Mode Tests', () => {
   const fullUser: UserProfileData = {
     displayName: 'Priya Sharma',
     avatarUrl: '',
-    homeArea: 'Singapore',
+    homeArea: 'Tiong Bahru',
     bio: 'Loves coffee and craft.',
     passCompletionPct: 80,
     deepProfile: {
@@ -192,8 +201,8 @@ describe('Small Community Mode Tests', () => {
     const mockSource = {
       async getCandidates() {
         return [1, 2, 3, 4, 5].map((i) => ({
-          ...DEMO_PROFILES[i],
-          profile: { ...DEMO_PROFILES[i].profile, id: `real-member-${i}`, display_name: `Real Member ${i}` },
+          ...DEMO_PROFILES[0],
+          profile: { ...DEMO_PROFILES[0].profile, id: `real-member-${i}`, display_name: `Real Member ${i}` },
           isDemo: false,
         }));
       },
@@ -314,7 +323,7 @@ describe('Small Community Mode Tests', () => {
 
     const viewerA: UserProfileData = {
       displayName: 'Viewer A',
-      homeArea: 'Singapore',
+      homeArea: 'Tiong Bahru',
       avatarUrl: '',
       bio: 'Bio A',
       passCompletionPct: 10,
@@ -329,7 +338,7 @@ describe('Small Community Mode Tests', () => {
 
     const viewerB: UserProfileData = {
       displayName: 'Viewer B',
-      homeArea: 'Singapore',
+      homeArea: 'Tiong Bahru',
       avatarUrl: '',
       bio: 'Bio B',
       passCompletionPct: 10,

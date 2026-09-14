@@ -55,9 +55,8 @@ export function readBrowserCoordinates(
 
 /**
  * Box 3 write so filter_local_online_ids can see this member. Returns false when
- * presence could not be established, which the caller must treat as a failure:
- * without a point of origin the spatial filter returns nothing, and that is not
- * the same as nobody being nearby.
+ * presence could not be established. Matching still continues on the same-area
+ * label pool; a missing live point is not by itself an empty result.
  */
 export async function reportBrowserLivePresence(
   getPosition: () => Promise<LiveCoordinates> = readBrowserCoordinates,

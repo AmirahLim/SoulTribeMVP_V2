@@ -841,4 +841,62 @@ assert.equal((await db.query('select count(*)::int n from behavior.matrix where 
 await db.query('delete from trait_personality where user_id=$1', [retiredMember]);
 assert.equal((await db.query('select count(*)::int n from behavior.matrix where user_id=$1', [retiredMember])).rows[0].n, 0);
 console.log('Passed member erasure through the behavior sync trigger and retirement of the derived matrix row.');
+
+for (let i = 0; i < 2; i++) {
+  await db.exec(await readFile(
+    new URL('../supabase/migrations/20261017000000_presence_expiry_and_area_ids.sql', import.meta.url), 'utf8'));
+}
+
+await db.exec('reset role');
+await db.query("update geo.live_presence set updated_at = now() - interval '16 minutes' where user_id=$1", [guest]);
+await as(host);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_online_ids(5000)')).rows,
+  [],
+  'stale presence must not count as currently present',
+);
+await as(guest);
+await db.query('select upsert_live_presence($1,$2,true)', [103.821, 1.353]);
+await as(host);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_online_ids(5000) order by user_id')).rows.map((row) => row.user_id),
+  [guest],
+);
+
+const areaViewer = '10000000-0000-4000-8000-0000000000d1';
+const areaPeer = '10000000-0000-4000-8000-0000000000d2';
+const areaStranger = '10000000-0000-4000-8000-0000000000d3';
+await db.exec('reset role');
+for (const id of [areaViewer, areaPeer, areaStranger]) {
+  await db.query('insert into auth.users values($1)', [id]);
+}
+await as(areaViewer);
+await db.query(`select save_profile_bundle($1,'{}','{}',null)`, [
+  { handle: 'area_viewer', display_name: 'Area Viewer', home_area: 'Katong', birth_year: 1995 },
+]);
+await as(areaPeer);
+await db.query(`select save_profile_bundle($1,'{}','{}',null)`, [
+  { handle: 'area_peer', display_name: 'Area Peer', home_area: 'Katong', birth_year: 1995 },
+]);
+await as(areaStranger);
+await db.query(`select save_profile_bundle($1,'{}','{}',null)`, [
+  { handle: 'area_stranger', display_name: 'Area Stranger', home_area: 'Bishan', birth_year: 1995 },
+]);
+await as(areaViewer);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_area_ids() order by user_id')).rows.map((row) => row.user_id),
+  [areaPeer],
+);
+assert.deepEqual(
+  Object.keys((await db.query('select * from filter_local_area_ids()')).rows[0]),
+  ['user_id'],
+);
+await db.exec('reset role');
+await db.query('insert into blocks(blocker_id,blocked_id) values($1,$2)', [areaViewer, areaPeer]);
+await as(areaViewer);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_area_ids()')).rows,
+  [],
+);
+console.log('Passed 15-minute presence expiry on read and same-area ID fallback without coordinates.');
 await db.close();

@@ -12,7 +12,7 @@ import type { UserProfileData } from '../userStore';
 
 const mockUser: UserProfileData = {
   displayName: 'Tester',
-  homeArea: 'Singapore',
+  homeArea: 'Tiong Bahru',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
   passCompletionPct: 80,
   birthYear: 1995,

@@ -4,7 +4,7 @@ import { getRankedMatches, RankedMatch } from '../matching';
 import { POST } from '../../app/api/matches/route';
 import { NextRequest } from 'next/server';
 import { evaluateGates } from '@soul-tribe/core';
-const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],rpcIds:null as string[] | null,calls:[] as string[],rpcRadius:null as number | null,baseline:{
+const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],rpcIds:null as string[] | null,areaIds:[] as string[],calls:[] as string[],rpcRadius:null as number | null,baseline:{
   travelKm:10,
   intent:['Close circle'],
   clicks:['Our humour just lands'],
@@ -41,8 +41,11 @@ vi.mock('@supabase/supabase-js', () => {
       return {
         rpc: async (name: string, args?: { p_radius_meters?: number }) => {
           cacheTestState.calls.push(`rpc:${name}:${isAnonKey ? 'user' : 'admin'}`);
-          cacheTestState.rpcRadius = args?.p_radius_meters ?? null;
-          if (name !== 'filter_local_online_ids') return { data: null, error: new Error('unknown rpc') };
+          if (name === 'filter_local_online_ids') cacheTestState.rpcRadius = args?.p_radius_meters ?? null;
+          if (name === 'filter_local_area_ids') {
+            return { data: cacheTestState.areaIds.map((user_id: string) => ({ user_id })), error: null };
+          }
+          if (name !== 'filter_local_online_ids') return { data: null, error: { code: 'PGRST202', message: 'unknown rpc' } };
           if (cacheTestState.rpcIds) return { data: cacheTestState.rpcIds.map((user_id: string) => ({ user_id })), error: null };
           const ids = ['candidate-alice', 'blocked-user-99', ...Array.from({ length: cacheTestState.extra }, (_, i) => 'extra-candidate-' + i)];
           return { data: ids.map((user_id) => ({ user_id })), error: null };
@@ -188,7 +191,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
   const oldEnv = process.env;
 
   beforeEach(() => {
-    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.rpcIds=null;cacheTestState.calls=[];cacheTestState.rpcRadius=null;
+    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.rpcIds=null;cacheTestState.areaIds=[];cacheTestState.calls=[];cacheTestState.rpcRadius=null;
     process.env = {
       ...oldEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -248,7 +251,6 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     const results = await getRankedMatches(viewerUser, { userId: 'viewer-1' });
 
     expect(results).toHaveLength(2);
-    expect(cacheTestState.calls).toContain('browser-rpc:filter_local_online_ids:10000');
     expect(JSON.parse(String((fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined)?.body))).toEqual(
       expect.objectContaining({ radiusMeters: 10000 }),
     );
@@ -426,6 +428,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     expect(await empty.json()).toEqual([]);
     expect(cacheTestState.calls[0]).toBe('profile_answers');
     expect(cacheTestState.calls).toContain('rpc:filter_local_online_ids:user');
+    expect(cacheTestState.calls).toContain('rpc:filter_local_area_ids:user');
     expect(cacheTestState.calls.filter((call) => call === 'profiles').length).toBe(1);
 
     cacheTestState.calls = [];
@@ -436,6 +439,20 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     const json = await local.json();
     expect(json.map((row: { id: string }) => row.id)).toEqual(['candidate-alice']);
     expect(cacheTestState.calls).toContain('rpc:filter_local_online_ids:user');
+    expect(cacheTestState.calls).toContain('rpc:filter_local_area_ids:user');
+  });
+
+  it('fills the scoring pool from same-area IDs when the spatial pool is empty', async () => {
+    cacheTestState.rpcIds = [];
+    cacheTestState.areaIds = ['candidate-alice'];
+    const res = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' },
+    }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.map((row: { id: string }) => row.id)).toEqual(['candidate-alice']);
+    expect(res.headers.get('X-Match-Pool')).toBe('1');
+    expect(cacheTestState.calls).toContain('rpc:filter_local_area_ids:user');
   });
 
   it('passes onboarding travelKm into filter_local_online_ids when the client omits radiusMeters', async () => {

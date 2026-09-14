@@ -63,4 +63,31 @@ describe('Availability & Dealbreaker Gate Evaluation', () => {
     const res = evaluateGates(vecA, vecB);
     assert.ok(res.reasons.includes('NO_SHARED_AVAILABILITY_SLOT'));
   });
+
+  it('8. Unknown area pairs fail closed instead of inventing travel time', () => {
+    const sharedRhythm = { availability: ['sat_midday'], fri_night: false, sat_night: false };
+    const vecA = { ...baseA, geography: { ...baseA.geography, home_area: 'Punggol' }, social_rhythm: { ...baseA.social_rhythm, ...sharedRhythm } };
+    const vecB = { ...baseB, geography: { ...baseB.geography, home_area: 'Woodlands' }, social_rhythm: { ...baseB.social_rhythm, ...sharedRhythm } };
+
+    const res = evaluateGates(vecA, vecB, { candidatePoolSize: 15 });
+    assert.ok(res.reasons.includes('GEOGRAPHY_TOO_FAR'));
+  });
+
+  it('9. Missing home_area fails closed instead of substituting Tiong Bahru', () => {
+    const sharedRhythm = { availability: ['sat_midday'], fri_night: false, sat_night: false };
+    const vecA = { ...baseA, geography: { ...baseA.geography, home_area: undefined }, social_rhythm: { ...baseA.social_rhythm, ...sharedRhythm } };
+    const vecB = { ...baseB, geography: { ...baseB.geography, home_area: 'Bishan' }, social_rhythm: { ...baseB.social_rhythm, ...sharedRhythm } };
+
+    const res = evaluateGates(vecA, vecB, { candidatePoolSize: 15 });
+    assert.ok(res.reasons.includes('GEOGRAPHY_TOO_FAR'));
+  });
+
+  it('10. The same reported label still passes the minute gate', () => {
+    const sharedRhythm = { availability: ['sat_midday'], fri_night: false, sat_night: false };
+    const vecA = { ...baseA, geography: { ...baseA.geography, home_area: 'Punggol' }, social_rhythm: { ...baseA.social_rhythm, ...sharedRhythm } };
+    const vecB = { ...baseB, geography: { ...baseB.geography, home_area: ' Punggol ' }, social_rhythm: { ...baseB.social_rhythm, ...sharedRhythm } };
+
+    const res = evaluateGates(vecA, vecB, { candidatePoolSize: 15 });
+    assert.strictEqual(res.reasons.includes('GEOGRAPHY_TOO_FAR'), false);
+  });
 });

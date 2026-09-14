@@ -27,26 +27,28 @@ vi.mock('../supabase', () => ({
   }),
 }));
 
-describe('A failed presence write is reported as a failure, not an empty list', () => {
+describe('A failed presence write still asks the server for the area pool', () => {
   beforeEach(() => {
     presenceState.presenceOk = true;
     presenceState.localIds = [];
     vi.restoreAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'X-Match-Pool': '0' },
+    }));
   });
 
-  it('throws LocationUnavailableError when the presence write returns false', async () => {
+  it('does not throw LocationUnavailableError when the presence write returns false', async () => {
     presenceState.presenceOk = false;
     const { realCandidateSource, getLastSpatialPoolSize } = await import('../matching');
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const viewer = { profile: { id: 'viewer-1', display_name: 'Viewer', confidence: 0.5 } } as never;
+    const viewer = { profile: { id: 'viewer-1', display_name: 'Viewer', home_area: 'Bishan', confidence: 0.5 } } as never;
 
-    await expect(realCandidateSource.getScoredMatches(viewer)).rejects.toBeInstanceOf(LocationUnavailableError);
-    // A pool of null means unmeasured. Leaving a stale zero here would let the screen
-    // claim nobody is nearby when it never got to look.
-    expect(getLastSpatialPoolSize()).toBeNull();
+    await expect(realCandidateSource.getScoredMatches(viewer)).resolves.toEqual([]);
+    expect(getLastSpatialPoolSize()).toBe(0);
   });
 
-  it('does not consult the spatial filter at all when presence failed', async () => {
+  it('does not consult the spatial filter when presence failed', async () => {
     presenceState.presenceOk = false;
     const { filterLocalOnlineIds } = await import('../livePresence');
     const { realCandidateSource } = await import('../matching');
@@ -54,6 +56,33 @@ describe('A failed presence write is reported as a failure, not an empty list', 
 
     await realCandidateSource.getScoredMatches({ profile: { id: 'viewer-1' } } as never).catch(() => {});
     expect(filterLocalOnlineIds).not.toHaveBeenCalled();
+  });
+
+  it('throws LocationUnavailableError only when the server had no GPS origin and no home area', async () => {
+    presenceState.presenceOk = false;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'X-Match-Empty-Reason': 'no_match_origin', 'X-Match-Pool': '0' },
+    }));
+    const { realCandidateSource, getLastSpatialPoolSize } = await import('../matching');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const viewer = { profile: { id: 'viewer-1', display_name: 'Viewer', confidence: 0.5 } } as never;
+
+    await expect(realCandidateSource.getScoredMatches(viewer)).rejects.toBeInstanceOf(LocationUnavailableError);
+    expect(getLastSpatialPoolSize()).toBeNull();
+  });
+
+  it('records the server pool size from X-Match-Pool after a successful request', async () => {
+    presenceState.presenceOk = false;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'X-Match-Pool': '4' },
+    }));
+    const { realCandidateSource, getLastSpatialPoolSize } = await import('../matching');
+    const viewer = { profile: { id: 'viewer-1', display_name: 'Viewer', home_area: 'Bishan', confidence: 0.5 } } as never;
+
+    await expect(realCandidateSource.getScoredMatches(viewer)).resolves.toEqual([]);
+    expect(getLastSpatialPoolSize()).toBe(4);
   });
 });
 
@@ -153,11 +182,22 @@ describe('Copy is asserted from the shipped source, never restated in a test', (
   });
 });
 
-const routeState = vi.hoisted(() => ({ auditRows: [] as Record<string, any>[], localIds: [] as string[] }));
+const routeState = vi.hoisted(() => ({
+  auditRows: [] as Record<string, any>[],
+  localIds: [] as string[],
+  areaIds: [] as string[],
+  viewerHomeArea: 'Bishan' as string | null,
+}));
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
-    rpc: async () => ({ data: routeState.localIds.map((user_id) => ({ user_id })), error: null }),
+    rpc: async (name: string) => {
+      if (name === 'filter_local_online_ids')
+        return { data: routeState.localIds.map((user_id) => ({ user_id })), error: null };
+      if (name === 'filter_local_area_ids')
+        return { data: routeState.areaIds.map((user_id) => ({ user_id })), error: null };
+      return { data: null, error: { code: 'PGRST202', message: 'unknown rpc' } };
+    },
     auth: { getUser: async () => ({ data: { user: { id: 'viewer-1' } }, error: null }) },
     from: (table: string) => {
       if (table === 'interaction_events') return {
@@ -167,6 +207,26 @@ vi.mock('@supabase/supabase-js', () => ({
         return { select: () => ({ or: async () => ({ data: [], error: null }) }) };
       if (table === 'profile_answers') return {
         select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { onboarding: {} }, error: null }) }) }),
+      };
+      if (table === 'profiles') return {
+        select: () => ({
+          in: async () => ({ data: [], error: null }),
+          eq: () => ({
+            eq: () => ({ maybeSingle: async () => ({
+              data: routeState.viewerHomeArea == null ? null : {
+                id: 'viewer-1', status: 'active', home_area: routeState.viewerHomeArea,
+                display_name: 'Viewer', birth_year: 1995,
+              },
+              error: null,
+            })}),
+            maybeSingle: async () => ({
+              data: routeState.viewerHomeArea == null ? null : {
+                id: 'viewer-1', status: 'active', home_area: routeState.viewerHomeArea,
+              },
+              error: null,
+            }),
+          }),
+        }),
       };
       return {
         select: () => ({
@@ -185,6 +245,8 @@ describe('An empty result leaves a trace in interaction_events', () => {
   beforeEach(() => {
     routeState.auditRows = [];
     routeState.localIds = [];
+    routeState.areaIds = [];
+    routeState.viewerHomeArea = 'Bishan';
     process.env = {
       ...oldEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -207,8 +269,25 @@ describe('An empty result leaves a trace in interaction_events', () => {
     expect(audit.event_type).toBe('recommendations_generated');
     expect(audit.actor_id).toBe('viewer-1');
     expect(audit.payload.spatial_pool).toBe(0);
+    expect(audit.payload.area_pool).toBe(0);
+    expect(audit.payload.local_pool).toBe(0);
     expect(audit.payload.count).toBe(0);
-    expect(audit.payload.empty_reason).toBe('empty_spatial_pool');
-    expect(res.headers.get('X-Match-Empty-Reason')).toBe('empty_spatial_pool');
+    expect(audit.payload.empty_reason).toBe('empty_local_pool');
+    expect(res.headers.get('X-Match-Empty-Reason')).toBe('empty_local_pool');
+    expect(res.headers.get('X-Match-Pool')).toBe('0');
+  });
+
+  it('names the empty result no_match_origin when the viewer has no home area either', async () => {
+    routeState.viewerHomeArea = '  ';
+    const { POST } = await import('../../app/api/matches/route');
+    const res = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' },
+      body: JSON.stringify({ limit: 10, radiusMeters: 10000 }),
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+    expect(routeState.auditRows[0].payload.empty_reason).toBe('no_match_origin');
+    expect(res.headers.get('X-Match-Empty-Reason')).toBe('no_match_origin');
   });
 });

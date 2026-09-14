@@ -51,7 +51,8 @@ vi.mock('@supabase/supabase-js', () => {
   return {
     createClient: vi.fn(() => ({
       rpc: async (name: string) => {
-        if (name !== 'filter_local_online_ids') return { data: null, error: new Error('unknown rpc') };
+        if (name === 'filter_local_area_ids') return { data: [], error: null };
+        if (name !== 'filter_local_online_ids') return { data: null, error: { code: 'PGRST202', message: 'unknown rpc' } };
         return { data: candidateIds().map((user_id) => ({ user_id })), error: null };
       },
       auth: {

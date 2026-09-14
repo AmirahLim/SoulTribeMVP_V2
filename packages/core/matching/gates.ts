@@ -79,23 +79,24 @@ export function evaluateGates(
     // Preserve legacy minute-based policy only for legacy profiles. New km
     // preferences cannot be evaluated without mapped locations.
     if (!hasKilometrePreference(vecA.geography) && !hasKilometrePreference(vecB.geography)) {
-    const travelMins = getTravelTimeMinutes(
-      vecA.geography?.home_area || 'Tiong Bahru',
-      vecB.geography?.home_area || 'Tiong Bahru'
-    );
+    const areaA = vecA.geography?.home_area?.trim();
+    const areaB = vecB.geography?.home_area?.trim();
+    const travelMins = areaA && areaB ? getTravelTimeMinutes(areaA, areaB) : null;
 
     const radA = vecA.geography?.radius_minutes || {};
     const radB = vecB.geography?.radius_minutes || {};
     const categories = ['coffee', 'dining', 'active', 'cultural', 'nightlife', 'creative'];
 
     let geoPassed = false;
-    for (const cat of categories) {
-      const rA = radA[cat] ?? 30;
-      const rB = radB[cat] ?? 30;
-      const minRad = Math.min(rA, rB);
-      if (travelMins <= 2 * minRad) {
-        geoPassed = true;
-        break;
+    if (travelMins != null) {
+      for (const cat of categories) {
+        const rA = radA[cat] ?? 30;
+        const rB = radB[cat] ?? 30;
+        const minRad = Math.min(rA, rB);
+        if (travelMins <= 2 * minRad) {
+          geoPassed = true;
+          break;
+        }
       }
     }
     if (!geoPassed) {

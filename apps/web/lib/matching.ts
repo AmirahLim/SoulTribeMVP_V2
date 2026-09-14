@@ -14,7 +14,7 @@ import { toProfileVector } from './profileAdapter';
 export { toProfileVector };
 import { initTelemetry } from './telemetryInit';
 import { getSupabaseBrowserClient, checkIsSupabaseConfigured } from './supabase';
-import { filterLocalOnlineIds, reportBrowserLivePresence } from './livePresence';
+import { reportBrowserLivePresence } from './livePresence';
 import { LocationUnavailableError } from './matchListState';
 import { radiusMetersFromProfile } from './onboardingSpatial';
 
@@ -88,14 +88,11 @@ export const realCandidateSource: ScoredMatchSource = {
         throw new Error('Your session is not ready. Please sign in again.');
       }
 
-      // Without a live point the spatial filter has no origin and returns nothing,
-      // so an unwritten presence is a failure to report, not an empty pool.
-      if (!(await reportBrowserLivePresence())) {
-        lastSpatialPoolSize = null;
-        throw new LocationUnavailableError();
-      }
+      // A denied or failed live point is not a matching failure: the server still
+      // scores the same-area label pool. Location is unavailable only when the
+      // server reports it had no GPS origin and no home_area to fall back on.
+      await reportBrowserLivePresence();
       const radiusMeters = _opts?.radiusMeters ?? radiusMetersFromProfile(null);
-      lastSpatialPoolSize = (await filterLocalOnlineIds(radiusMeters)).length;
 
       const res = await fetch('/api/matches', {
         method: 'POST',
@@ -110,6 +107,16 @@ export const realCandidateSource: ScoredMatchSource = {
         const errJson = await res.json().catch(() => ({}));
         console.error('[SoulTribe] candidate query failed:', res.status, errJson.error || res.statusText);
         throw new Error(errJson.error || `Server match request failed with status ${res.status}`);
+      }
+
+      if (res.headers.get('X-Match-Empty-Reason') === 'no_match_origin') {
+        lastSpatialPoolSize = null;
+        throw new LocationUnavailableError();
+      }
+      const poolHeader = res.headers.get('X-Match-Pool');
+      if (poolHeader !== null) {
+        const parsed = Number(poolHeader);
+        if (Number.isInteger(parsed) && parsed >= 0) lastSpatialPoolSize = parsed;
       }
 
       const matches: RankedMatch[] = await res.json();

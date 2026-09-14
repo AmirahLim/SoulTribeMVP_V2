@@ -19,7 +19,7 @@ describe('Repeat Suppression & Freshness Service Tests', () => {
     id: 'user-viewer-1',
     displayName: 'Priya Sharma',
     avatarUrl: '',
-    homeArea: 'Singapore',
+    homeArea: 'Tiong Bahru',
     bio: 'Loves coffee and craft.',
     passCompletionPct: 80,
     deepProfile: {
@@ -42,8 +42,8 @@ describe('Repeat Suppression & Freshness Service Tests', () => {
   };
 
   const candC = {
-    ...DEMO_PROFILES[2],
-    profile: { ...DEMO_PROFILES[2].profile, id: 'real-user-c', display_name: 'User C' },
+    ...DEMO_PROFILES[0],
+    profile: { ...DEMO_PROFILES[0].profile, id: 'real-user-c', display_name: 'User C' },
     isDemo: false,
   };
 
