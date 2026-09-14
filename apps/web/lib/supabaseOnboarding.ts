@@ -3,6 +3,7 @@ import type { DeepProfileAnswers } from './userStore';
 import { ONBOARDING_INTEREST_NODES } from '@soul-tribe/core';
 import { suppliedTraitFields } from './savedAnswerRead';
 import { packageOnboardingForBundle } from './onboardingBundle';
+import { isInlinePhoto } from './privateAvatar';
 
 export interface OnboardingDataToSave {
   displayName: string;
@@ -83,7 +84,8 @@ export async function saveOnboardingToSupabase(
       display_name: data.handle.trim().toLowerCase(),
       home_area: data.homeArea.trim(),
       birth_year: data.birthYear,
-      avatar_url: data.avatarUrl || null,
+      // A device preview is never persisted; the bucket upload follows sign-in.
+      avatar_url: isInlinePhoto(data.avatarUrl) ? null : data.avatarUrl || null,
       bio: data.bio || null,
     },
     { onboarding: packageOnboardingForBundle(data) },

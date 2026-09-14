@@ -1,4 +1,5 @@
 import { checkIsSupabaseConfigured, getSupabaseBrowserClient } from './supabase';
+import { privateAvatarUrl } from './privateAvatar';
 
 export const ALLOWED_AVATAR_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 export const MAX_AVATAR_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB max raw camera photo
@@ -145,42 +146,36 @@ export async function uploadAvatar(
     try {
       const client = getSupabaseBrowserClient();
       const photoBlob = dataUrlToBlob(finalPhotoUrl);
-      const filePath = `${userId}/avatar-${Date.now()}.jpg`;
+      // Content-addressed names are not needed here, but the path must satisfy
+      // validAvatarPath so /api/avatar will serve it back.
+      const filePath = `${userId}/avatar-${crypto.randomUUID()}.jpg`;
 
-      // Attempt upload to storage bucket 'avatars'
       const { data: uploadData, error: uploadErr } = await client.storage
         .from('avatars')
-        .upload(filePath, photoBlob, {
-          upsert: true,
-          contentType: 'image/jpeg',
-        });
+        .upload(filePath, photoBlob, { upsert: false, contentType: 'image/jpeg' });
 
-      if (!uploadErr && uploadData?.path) {
-        const { data: publicUrlData } = client.storage
-          .from('avatars')
-          .getPublicUrl(uploadData.path);
-
-        const storageAvatarUrl = publicUrlData?.publicUrl || uploadData.path;
-
-        await client
-          .from('profiles')
-          .update({ avatar_url: storageAvatarUrl })
-          .eq('id', userId);
-
-        return { success: true, avatarUrl: storageAvatarUrl };
+      if (uploadErr || !uploadData?.path) {
+        return { success: false, error: 'Your photo could not be uploaded. Please retry.' };
       }
 
-      // If storage bucket missing or error occurs, save compressed data URL to profile
-      await client
+      // The bucket is private, so a public URL would never load. Store the app
+      // URL, and never fall back to writing the whole photo into the column.
+      const storedUrl = privateAvatarUrl(uploadData.path);
+      const { error: saveErr } = await client
         .from('profiles')
-        .update({ avatar_url: finalPhotoUrl })
+        .update({ avatar_url: storedUrl })
         .eq('id', userId);
 
-      return { success: true, avatarUrl: finalPhotoUrl };
+      if (saveErr) {
+        return { success: false, error: 'Photo uploaded, but it could not be added to your profile. Please retry.' };
+      }
+
+      return { success: true, avatarUrl: storedUrl };
     } catch {
-      return { success: true, avatarUrl: finalPhotoUrl };
+      return { success: false, error: 'Your photo could not be uploaded. Please retry.' };
     }
   }
 
+  // No account yet: this preview is held on the device and uploaded after sign-in.
   return { success: true, avatarUrl: finalPhotoUrl };
 }
