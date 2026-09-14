@@ -720,4 +720,46 @@ assert.equal((await db.query('select * from trait_repair where user_id=$1',[obse
 await db.query('delete from profiles where id=$1',[observers[4]]);
 assert.equal((await db.query('select * from trait_repair where user_id=$1',[observers[4]])).rows.length,0);
 console.log('Passed 8a question validation, source withdrawal, RLS, peer threshold release, immediate withdrawal suppression, private storage, atomic cache leases and migration repeatability.');
+
+// The avatar backfill ledger holds original member photographs while their bytes
+// move to the private bucket. No member session may ever read it.
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../supabase/migrations/20261013000000_avatar_backfill_ledger.sql', import.meta.url), 'utf8'));
+assert.equal((await db.query("select relrowsecurity from pg_class where oid='public.avatar_backfill'::regclass")).rows[0].relrowsecurity, true);
+assert.equal((await db.query("select count(*)::int n from pg_policies where schemaname='public' and tablename='avatar_backfill'")).rows[0].n, 0);
+const ledgerSha = 'b'.repeat(64);
+const ledgerMember = '10000000-0000-4000-8000-0000000000f1';
+await db.query('insert into auth.users values($1)', [ledgerMember]);
+await as(ledgerMember);
+await db.query(`select save_profile_bundle($1,'{}','{}',null)`, [
+  { handle: 'ledger_member', display_name: 'Ledger Member', home_area: 'Singapore', birth_year: 1995 },
+]);
+await db.exec('reset role');
+await db.query(
+  `insert into avatar_backfill(user_id,original_avatar_url,declared_mime,decoded_bytes,decoded_sha256,storage_path)
+   values($1,'data:image/jpeg;base64,AAAA','image/jpeg',3,$2,$3)`,
+  [ledgerMember, ledgerSha, ledgerMember + '/avatar-' + ledgerSha.slice(0, 32) + '.jpg'],
+);
+await fails(
+  `insert into avatar_backfill(user_id,original_avatar_url,declared_mime,decoded_bytes,decoded_sha256,storage_path,state)
+   values($1,'data:image/jpeg;base64,AAAA','image/jpeg',3,$2,'p','done')`,
+  /avatar_backfill_state_check/, [guest, ledgerSha],
+);
+await fails(
+  `insert into avatar_backfill(user_id,original_avatar_url,declared_mime,decoded_bytes,decoded_sha256,storage_path)
+   values($1,'data:image/jpeg;base64,AAAA','image/jpeg',0,$2,'p')`,
+  /avatar_backfill_decoded_bytes_check/, [guest, ledgerSha],
+);
+await as(host);
+await fails('select * from avatar_backfill', /permission denied/);
+await fails('select original_avatar_url from avatar_backfill', /permission denied/);
+await db.exec('reset role');
+const ledgerBefore = (await db.query('select updated_at from avatar_backfill where user_id=$1', [ledgerMember])).rows[0].updated_at;
+await db.query("update avatar_backfill set state='verified' where user_id=$1", [ledgerMember]);
+const ledgerAfter = (await db.query('select state,updated_at from avatar_backfill where user_id=$1', [ledgerMember])).rows[0];
+assert.equal(ledgerAfter.state, 'verified');
+assert.ok(ledgerAfter.updated_at >= ledgerBefore);
+await db.query('delete from profiles where id=$1', [ledgerMember]);
+assert.equal((await db.query('select count(*)::int n from avatar_backfill where user_id=$1', [ledgerMember])).rows[0].n, 0);
+console.log('Passed avatar backfill ledger owner denial, state and size constraints, update stamping, cascade cleanup and repeatable migration.');
 await db.close();
