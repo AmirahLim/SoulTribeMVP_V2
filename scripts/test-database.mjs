@@ -789,6 +789,35 @@ assert.match(liveStateIndex, /\(state, starts_at\)/);
 assert.match(liveStateIndex, /WHERE \(state = ANY \(ARRAY\['open'::text, 'confirmed'::text\]\)\)/i);
 console.log('Passed outings host and live-state index coverage with a repeatable migration.');
 
+// outing_messages is read by outing_id, newest first, limited to 50. blocks is
+// read as blocker_id = uid or blocked_id = uid; the primary key only leads on
+// blocker_id. reports stays on reports_pkey until a plan actually uses more.
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../supabase/migrations/20261018000000_chat_and_blocks_indexes.sql', import.meta.url), 'utf8'));
+const messageIndexes = (await db.query(
+  "select indexname,indexdef from pg_indexes where schemaname='public' and tablename='outing_messages' order by indexname",
+)).rows;
+assert.deepEqual(messageIndexes.map((row) => row.indexname),
+  ['outing_messages_outing_id_created_at_idx', 'outing_messages_pkey']);
+assert.match(
+  messageIndexes.find((r) => r.indexname === 'outing_messages_outing_id_created_at_idx').indexdef,
+  /\(outing_id, created_at DESC\)/,
+);
+const blockIndexes = (await db.query(
+  "select indexname,indexdef from pg_indexes where schemaname='public' and tablename='blocks' order by indexname",
+)).rows;
+assert.deepEqual(blockIndexes.map((row) => row.indexname),
+  ['blocks_blocked_id_idx', 'blocks_pkey']);
+assert.match(
+  blockIndexes.find((r) => r.indexname === 'blocks_blocked_id_idx').indexdef,
+  /\(blocked_id\)/,
+);
+const reportIndexes = (await db.query(
+  "select indexname from pg_indexes where schemaname='public' and tablename='reports' order by indexname",
+)).rows.map((row) => row.indexname);
+assert.deepEqual(reportIndexes, ['reports_pkey']);
+console.log('Passed outing_messages and blocks index coverage with a repeatable migration.');
+
 // behavior.matrix is derived from two trait tables by a trigger that also fires on
 // delete. Rebuilding the row during a profile delete broke member erasure outright,
 // so deletion is asserted here rather than assumed.
