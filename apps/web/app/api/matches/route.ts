@@ -115,7 +115,6 @@ export async function POST(req: NextRequest) {
         profile_version,
         explanation_revision,
         display_name,
-        avatar_url,
         home_area,
         bio,
         birth_year,
@@ -245,7 +244,6 @@ export async function POST(req: NextRequest) {
       rankedMatches.push({
         id: candRow.id,
         name: candRow.display_name || 'Member',
-        avatarUrl: candRow.avatar_url || getGenderAvatarForName(candRow.display_name || 'Member'),
         homeArea: candRow.home_area || 'Singapore',
         bio: candRow.bio || 'Member in Singapore',
         rankScore: Math.min(1, softRes.adjustedScore + reflectionBoost(Boolean(learningPreference?.use_reflections), candRow.id, ownReflections)),
@@ -260,6 +258,16 @@ export async function POST(req: NextRequest) {
     rankedMatches.sort((a, b) => b.rankScore - a.rankScore);
     const scoringMs = performance.now()-scoringStarted;
     const shortlisted = rankedMatches.slice(0,resultLimit);
+    // Photos cannot change ranking, gating or explanation wording, so they load
+    // only for the members actually returned rather than the whole scored pool.
+    const avatarById = new Map<string,string|null>();
+    if (shortlisted.length) {
+      const {data:avatarRows,error:avatarError} = await adminClient.from('profiles')
+        .select('id, avatar_url').in('id',shortlisted.map(item=>item.id));
+      if (avatarError) console.error('[SoulTribe API] Avatar lookup failed; using placeholders:',
+        {code:avatarError.code,message:avatarError.message});
+      else for (const row of avatarRows ?? []) avatarById.set(row.id,row.avatar_url);
+    }
     const candidateRows = new Map(candidates.map(row=>[row.id,row]));
     const evidenceClient=createClient(supabaseUrl,publishableKey,{auth:{persistSession:false},global:{headers:{Authorization:`Bearer ${token}`}}});
     const bundles=await loadRosterEvidence(evidenceClient,authUserId,shortlisted.map(item=>item.id));
@@ -270,7 +278,8 @@ export async function POST(req: NextRequest) {
     if([...bundles].some(([id,b])=>!fresh.has(id)||evidenceHash(b)!==evidenceHash(fresh.get(id)!)))
       throw new Error('Matching evidence changed while the reading was prepared. Please retry.');
     const returnedMatches = shortlisted.map(item=>({
-      ...item,clickText:explanations.get(item.id)!.click_text,rubText:explanations.get(item.id)!.friction_text,
+      ...item,avatarUrl:avatarById.get(item.id) || getGenderAvatarForName(item.name),
+      clickText:explanations.get(item.id)!.click_text,rubText:explanations.get(item.id)!.friction_text,
     }));
 
     // Part 1.5: Emit match surfaced events on server for real candidates

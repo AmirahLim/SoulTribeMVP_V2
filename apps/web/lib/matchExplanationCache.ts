@@ -10,8 +10,11 @@ export const EXPLANATION_ENGINE_VERSION = 'match-explanation/8a.5';
 export type ExplanationProfile = { id: string; profile_version: number; explanation_revision: number };
 export type ExplanationText = { click_text: string; friction_text: string };
 type Input = { row: ExplanationProfile; vector: ProfileVector };
+// A profile photo cannot change a single word of an explanation, so it is kept out
+// of the hashed inputs. Otherwise changing a photo invalidates every cached pair.
 function publicVector(vector: ProfileVector): ProfileVector {
   return { ...vector, emotional:undefined, repair:undefined, answers:undefined,
+    profile: { ...vector.profile, avatar_url: undefined },
     values: vector.values?.filter(value => value.visibility === 'public') };
 }
 function stable(value: unknown): string {
