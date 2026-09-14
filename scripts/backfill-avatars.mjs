@@ -116,10 +116,11 @@ async function writePass() {
       // because this script could not read it.
       problems.push({ id: row.id, state: found.state, error: found.error });
       console.error(`  ${short(row.id)} ${found.state}: ${found.error} — column untouched`);
+      // No byte count, hash or target path is known, and none is invented.
       if (commit) await recordLedger({
         user_id: row.id, original_avatar_url: row.avatar_url,
-        declared_mime: found.declaredMime ?? 'unknown', decoded_bytes: 1,
-        decoded_sha256: '0'.repeat(64), storage_path: '', state: found.state, error: found.error,
+        declared_mime: found.declaredMime ?? 'unknown', decoded_bytes: null,
+        decoded_sha256: null, storage_path: null, state: found.state, error: found.error,
       });
       continue;
     }
@@ -256,6 +257,10 @@ async function reportPass() {
   for (const entry of entries) byState[entry.state] = (byState[entry.state] ?? 0) + 1;
   console.log('ledger by state:', Object.keys(byState).length ? byState : '(empty)');
   for (const entry of entries) {
+    if (!entry.storage_path || !entry.decoded_sha256) {
+      console.log(`  ${short(entry.user_id)} ${entry.state} (no stored object) ${entry.error ?? ''}`);
+      continue;
+    }
     const check = await verify(entry.storage_path, entry.decoded_sha256);
     console.log(`  ${short(entry.user_id)} ${entry.state} ${entry.storage_path} ${check.ok ? 'object verified' : 'OBJECT PROBLEM: ' + check.error}`);
   }

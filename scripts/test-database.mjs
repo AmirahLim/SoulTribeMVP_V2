@@ -750,6 +750,17 @@ await fails(
    values($1,'data:image/jpeg;base64,AAAA','image/jpeg',0,$2,'p')`,
   /avatar_backfill_decoded_bytes_check/, [guest, ledgerSha],
 );
+// A failure records no measurements, and no state may claim a stored object without them.
+await db.query(
+  `insert into avatar_backfill(user_id,original_avatar_url,declared_mime,state,error)
+   values($1,'data:image/gif;base64,AAAA','image/gif','mime_unsupported','outside the allowlist')`,
+  [guest],
+);
+await fails(
+  `update avatar_backfill set state='verified' where user_id=$1`,
+  /avatar_backfill_stored_states_measured/, [guest],
+);
+await db.query('delete from avatar_backfill where user_id=$1', [guest]);
 await as(host);
 await fails('select * from avatar_backfill', /permission denied/);
 await fails('select original_avatar_url from avatar_backfill', /permission denied/);
