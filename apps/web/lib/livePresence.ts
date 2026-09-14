@@ -53,7 +53,12 @@ export function readBrowserCoordinates(
   });
 }
 
-/** Best-effort Box 3 write so filter_local_online_ids can see this member. */
+/**
+ * Box 3 write so filter_local_online_ids can see this member. Returns false when
+ * presence could not be established, which the caller must treat as a failure:
+ * without a point of origin the spatial filter returns nothing, and that is not
+ * the same as nobody being nearby.
+ */
 export async function reportBrowserLivePresence(
   getPosition: () => Promise<LiveCoordinates> = readBrowserCoordinates,
   clientFactory = getSupabaseBrowserClient,
@@ -62,7 +67,8 @@ export async function reportBrowserLivePresence(
     const { longitude, latitude } = await getPosition();
     await upsertLivePresence(longitude, latitude, true, clientFactory);
     return true;
-  } catch {
+  } catch (err: any) {
+    console.warn('[SoulTribe] live presence write failed:', err?.message || err);
     return false;
   }
 }

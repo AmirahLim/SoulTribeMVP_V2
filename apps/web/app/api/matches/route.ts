@@ -110,6 +110,28 @@ export async function POST(req: NextRequest) {
     }
     const localIds = [...new Set((localRows ?? []).map((row: { user_id: string }) => row.user_id).filter((id: string) => id && id !== authUserId))];
 
+    // Every path that returns matches records what it saw, including the paths that
+    // return none. An empty result with no audit row is indistinguishable from a
+    // request that never happened.
+    const writeAudit = async (payload: Record<string, unknown>) => {
+      const {error:auditError} = await adminClient.from('interaction_events').insert({
+        actor_id: authUserId, event_type: 'recommendations_generated',
+        engine_version: REFLECTION_RANKING_VERSION,
+        payload: {spatial_pool: localIds.length, radius_meters: radiusMeters, limit: resultLimit, ...payload},
+      });
+      if (auditError) {
+        console.error('[SoulTribe] matching timing audit failed',{code:auditError.code,message:auditError.message});
+        throw new Error(auditError.message);
+      }
+    };
+    const emptyResult = async (emptyReason: string, profilesFetched: number) => {
+      await writeAudit({count:0, profiles_fetched:profilesFetched, non_demo:0, after_self_exclusion:0,
+        eligible:0, empty_reason:emptyReason, reflections_enabled:false,
+        timing:{total_ms:performance.now()-requestStarted}});
+      return NextResponse.json([], { status: 200, headers:{'Cache-Control':'no-store',
+        'X-Match-Eligible':'0','X-Match-Empty-Reason':emptyReason} });
+    };
+
     const profileSelection = `
         id,
         profile_version,
@@ -163,7 +185,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (!dbProfiles || dbProfiles.length === 0) {
-      return NextResponse.json([], { status: 200 });
+      // An empty spatial pool short-circuits the profile fetch, so this covers both
+      // "nobody nearby was online" and "the nearby ids had no profile rows".
+      return emptyResult(localIds.length === 0 ? 'empty_spatial_pool' : 'no_candidate_profiles', 0);
     }
 
     // Exclude demo candidates server side
@@ -193,7 +217,7 @@ export async function POST(req: NextRequest) {
     // 3. Find viewer profile
     if (viewerError) return NextResponse.json({ error: 'Unable to load your profile' }, { status: 503 });
     if (!viewerRow) {
-      return NextResponse.json([], { status: 200 });
+      return emptyResult('viewer_profile_missing', dbProfiles.length);
     }
 
     const viewerVec = toProfileVector(adaptRowToUserData(viewerRow), authUserId);
@@ -302,16 +326,10 @@ export async function POST(req: NextRequest) {
 
     // Aggregate audit keeps private feedback out of client-visible text.
     const timing = {...metrics,scoring_ms:scoringMs,total_ms:performance.now()-requestStarted};
-    const {error:auditError} = await adminClient.from('interaction_events').insert({
-      actor_id: authUserId, event_type: 'recommendations_generated', engine_version: REFLECTION_RANKING_VERSION,
-      payload: { count: returnedMatches.length, profiles_fetched:dbProfiles.length,non_demo:nonDemoProfiles.length,
-        after_self_exclusion:candidates.length,eligible:rankedMatches.length,limit:resultLimit,
-        spatial_pool: localIds.length, radius_meters: radiusMeters,
-        reflections_enabled: Boolean(learningPreference?.use_reflections),timing } });
-    if(auditError) {
-      console.error('[SoulTribe] matching timing audit failed',{code:auditError.code,message:auditError.message});
-      throw new Error(auditError.message);
-    }
+    await writeAudit({ count: returnedMatches.length, profiles_fetched:dbProfiles.length,
+      non_demo:nonDemoProfiles.length, after_self_exclusion:candidates.length,
+      eligible:rankedMatches.length,
+      reflections_enabled: Boolean(learningPreference?.use_reflections), timing });
     const totalMs=performance.now()-requestStarted;
     return NextResponse.json(returnedMatches, { status: 200,headers:{
       'Cache-Control':'no-store',

@@ -15,6 +15,7 @@ export { toProfileVector };
 import { initTelemetry } from './telemetryInit';
 import { getSupabaseBrowserClient, checkIsSupabaseConfigured } from './supabase';
 import { filterLocalOnlineIds, reportBrowserLivePresence } from './livePresence';
+import { LocationUnavailableError } from './matchListState';
 import { radiusMetersFromProfile } from './onboardingSpatial';
 
 export type CandidateMode = 'real' | 'demo' | 'mixed';
@@ -87,7 +88,12 @@ export const realCandidateSource: ScoredMatchSource = {
         throw new Error('Your session is not ready. Please sign in again.');
       }
 
-      await reportBrowserLivePresence();
+      // Without a live point the spatial filter has no origin and returns nothing,
+      // so an unwritten presence is a failure to report, not an empty pool.
+      if (!(await reportBrowserLivePresence())) {
+        lastSpatialPoolSize = null;
+        throw new LocationUnavailableError();
+      }
       const radiusMeters = _opts?.radiusMeters ?? radiusMetersFromProfile(null);
       lastSpatialPoolSize = (await filterLocalOnlineIds(radiusMeters)).length;
 

@@ -239,6 +239,11 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
       return new Response(JSON.stringify([]), { status: 200 });
     });
 
+    // A missing location is its own reported failure now, so a working position keeps
+    // this test about the server response rather than the presence write.
+    vi.stubGlobal('navigator', {geolocation:{
+      getCurrentPosition:(ok:(p:any)=>void)=>ok({coords:{longitude:103.8198,latitude:1.3521}})}});
+
     const viewerUser = { id: 'viewer-1', displayName: 'Viewer', homeArea: 'Singapore', avatarUrl: '', bio: '', passCompletionPct: 80, travelKm: 10 };
     const results = await getRankedMatches(viewerUser, { userId: 'viewer-1' });
 

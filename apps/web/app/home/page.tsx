@@ -7,7 +7,8 @@ import Link from 'next/link';
 import keepsake from '../../components/EventKeepsake.module.css';
 import story from './HomeStory.module.css';
 import { PitchCard, Button } from '@soul-tribe/ui';
-import { getRankedMatches, RankedMatch, countRealMembers, isSmallCommunityMode, getTribalPassStatusCopy } from '../../lib/matching';
+import { getLastSpatialPoolSize, getRankedMatches, RankedMatch, countRealMembers, isSmallCommunityMode, getTribalPassStatusCopy } from '../../lib/matching';
+import { resolveMatchListState } from '../../lib/matchListState';
 import { fetchGoingOutings, fetchRadarOutings, fetchUserPitches, OutingItem, getOutingCategoryImage } from '../../lib/outingsStore';
 import { motion } from 'framer-motion';
 import { Plus, Users, MapPin, Calendar, CheckCircle2, Sparkles, Compass, AlertCircle, Edit3, Trash2 } from 'lucide-react';
@@ -16,6 +17,7 @@ import { useAuth } from '../../lib/authContext';
 import { getSupabaseBrowserClient, checkIsSupabaseConfigured } from '../../lib/supabase';
 import { AuthGuard } from '../../components/AuthGuard';
 import {MatchKeepsake} from '../../components/MatchKeepsake';
+import {MatchListNotice} from '../../components/MatchListNotice';
 import { OutingCoverHeader } from '../../components/OutingCoverHeader';
 
 import { useSearchParams } from 'next/navigation';
@@ -49,7 +51,10 @@ function HomeContent() {
   const [isSmallCommunity, setIsSmallCommunity] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Kept as the thrown value, not a string, so a missing location stays
+  // distinguishable from a genuine failure.
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [spatialPoolSize, setSpatialPoolSize] = useState<number | null>(null);
   const [pitchesError, setPitchesError] = useState<string | null>(null);
   const [goingError, setGoingError] = useState<string | null>(null);
   const [radarError, setRadarError] = useState<string | null>(null);
@@ -135,9 +140,15 @@ function HomeContent() {
           if (!cancelled) setIsSmallCommunity(smallMode);
 
           const rankedMatchesData = await getRankedMatches(userProf);
-          if (!cancelled) setMatches(rankedMatchesData);
-        } catch (err: any) {
-          if (!cancelled) setLoadError(err?.message || "Couldn't load matches right now");
+          if (!cancelled) {
+            setMatches(rankedMatchesData);
+            setSpatialPoolSize(getLastSpatialPoolSize());
+          }
+        } catch (err: unknown) {
+          if (!cancelled) {
+            setMatches([]);
+            setLoadError(err);
+          }
         }
 
         // 3. Going query
@@ -179,6 +190,10 @@ function HomeContent() {
       cancelled = true;
     };
   }, [user?.id, reloadTrigger]);
+
+  const matchListState = resolveMatchListState({
+    loading, error: loadError, matchCount: matches.length, spatialPoolSize,
+  });
 
   const handleToggleRadarJoin = async (outingId: string) => {
     const isCurrentlyJoined = Boolean(radarJoined[outingId]);
@@ -400,48 +415,18 @@ function HomeContent() {
               <span className="text-[12px] text-white/70">{matches.length} {matches.length === 1 ? 'Match' : 'Matches'}</span>
             </div>
 
-            {loading ? (
+            {matchListState.kind === 'loading' ? (
               <div className="p-8 text-center rounded-[24px] border border-white/20 bg-black/60 backdrop-blur-xl">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent mx-auto" />
                 <p className="mt-3 text-[13px] text-white/70">Calculating matches...</p>
               </div>
-            ) : loadError ? (
-              <div className="flex flex-col items-center text-center p-8 rounded-[28px] border border-red-500/30 bg-black/70 backdrop-blur-xl shadow-2xl">
-                <AlertCircle className="h-10 w-10 text-red-400" />
-                <h4 className="mt-4 text-[18px] font-extrabold text-white">Couldn't load members right now</h4>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-white/75 max-w-[300px]">
-                  Please check your connection or try again.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setReloadTrigger((prev) => prev + 1)}
-                  className="mt-5 rounded-full bg-white px-5 py-2 text-[13px] font-bold text-black hover:bg-white/90 shadow-md transition-transform hover:scale-105"
-                >
-                  Try Again
-                </button>
-              </div>
-            ) : matches.length === 0 ? (
-              /* REAL EMPTY STATE FOR MATCHES */
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex flex-col items-center text-center p-8 rounded-[28px] border border-white/20 bg-black/70 backdrop-blur-xl shadow-2xl"
-              >
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white border border-white/20">
-                  <Users className="h-7 w-7" />
-                </div>
-                <h4 className="mt-4 text-[18px] font-extrabold text-white">No Matches Yet</h4>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-white/75 max-w-[300px]">
-                  No eligible connections were returned this time. Your saved answers are still here; you can review your preferences or check back later.
-                </p>
-                <Link href="/you/deeper" className="mt-6">
-                  <Button variant="primary" size="sm">
-                    <Sparkles className="mr-1.5 h-4 w-4" /> Deepen Your Pass →
-                  </Button>
-                </Link>
-              </motion.div>
-            ) : (
+            ) : matchListState.kind === 'list' ? (
               matches.map((person) => <MatchKeepsake key={person.id} person={person}/>)
+            ) : (
+              /* Location unavailable, nobody in range, nobody eligible and load
+                 failure are four different answers and read as four. */
+              <MatchListNotice kind={matchListState.kind} copy={matchListState.copy}
+                onRetry={() => setReloadTrigger((prev) => prev + 1)} />
             )}
           </section>
         )}
