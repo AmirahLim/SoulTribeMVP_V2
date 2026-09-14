@@ -100,7 +100,7 @@ writable.
 
 ## Findings that need attention
 
-**1. A member's profile cannot be deleted.** Blocking, and it is an erasure
+**1. A member's profile could not be deleted. Fixed.** This was an erasure
 problem, not a performance one. `behavior.sync_from_traits()` is attached to
 `trait_personality` and `trait_experience` as `AFTER INSERT OR DELETE OR UPDATE`
 and unconditionally upserts into `behavior.matrix`. Deleting a profile cascades to
@@ -114,10 +114,16 @@ DETAIL: Key (user_id)=(...) is not present in table "profiles".
 CONTEXT: PL/pgSQL function sync_from_traits() line 9
 ```
 
-Cleanup for this run needed the triggers disabled to get around it. The fix is for
-the trigger function to return early on `TG_OP = 'DELETE'`, or to skip when no
-profile row exists. Until then account deletion and any data-erasure request will
-fail.
+Cleanup for this run needed the triggers disabled to get around it.
+
+`supabase/migrations/20261016000000_behavior_sync_survives_member_deletion.sql`
+fixes it: the function now returns early when no profile row exists, and retires the
+derived row rather than leaving nulls when the last source trait is removed. The
+regression test in `scripts/test-database.mjs` reproduces the original
+`matrix_user_id_fkey` failure without the migration and passes with it. Verified on
+production afterwards by creating a member with both trait rows and deleting it with
+both triggers live: the delete succeeded and left nothing in `profiles`,
+`behavior.matrix`, `account.details`, `trait_personality` or `trait_experience`.
 
 **2. Eleven tables have RLS enabled and zero policies.** `composed_read_cache`,
 `match_explanations`, `onboarding_drafts`, `onboarding_funnel_events`,

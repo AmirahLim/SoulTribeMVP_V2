@@ -788,4 +788,57 @@ const liveStateIndex = outingIndexes.find((r) => r.indexname === 'outings_live_s
 assert.match(liveStateIndex, /\(state, starts_at\)/);
 assert.match(liveStateIndex, /WHERE \(state = ANY \(ARRAY\['open'::text, 'confirmed'::text\]\)\)/i);
 console.log('Passed outings host and live-state index coverage with a repeatable migration.');
+
+// behavior.matrix is derived from two trait tables by a trigger that also fires on
+// delete. Rebuilding the row during a profile delete broke member erasure outright,
+// so deletion is asserted here rather than assumed.
+const erasedMember = '10000000-0000-4000-8000-0000000000e1';
+await db.exec('reset role');
+await db.query('insert into auth.users values($1)', [erasedMember]);
+await as(erasedMember);
+await db.query(`select save_profile_bundle($1,'{}','{}',null)`, [
+  { handle: 'erased_member', display_name: 'Erased Member', home_area: 'Singapore', birth_year: 1995 },
+]);
+await db.query(
+  `insert into trait_personality(user_id,extraversion,openness,answered) values($1,0.6,0.7,8)
+   on conflict (user_id) do update set extraversion=0.6`, [erasedMember]);
+await db.query(
+  `insert into trait_experience(user_id,novelty,answered) values($1,0.4,4)
+   on conflict (user_id) do update set novelty=0.4`, [erasedMember]);
+await db.exec('reset role');
+// The derived row must exist first, or the delete below would prove nothing.
+assert.equal(
+  (await db.query('select social_energy from behavior.matrix where user_id=$1', [erasedMember])).rows[0].social_energy, 60);
+
+for (let i = 0; i < 2; i++) {
+  await db.exec(await readFile(
+    new URL('../supabase/migrations/20261016000000_behavior_sync_survives_member_deletion.sql', import.meta.url), 'utf8'));
+}
+
+// A member holding traits must be erasable in one statement. Without the fix this
+// raises matrix_user_id_fkey, because the cascade fires the sync trigger which
+// rebuilds the derived row against a profile that has already gone.
+await db.query('delete from profiles where id=$1', [erasedMember]);
+for (const table of ['behavior.matrix', 'account.details', 'public.trait_personality', 'public.trait_experience']) {
+  assert.equal(
+    (await db.query(`select count(*)::int n from ${table} where user_id=$1`, [erasedMember])).rows[0].n, 0,
+    `${table} still holds a row for an erased member`);
+}
+assert.equal((await db.query('select count(*)::int n from profiles where id=$1', [erasedMember])).rows[0].n, 0);
+
+// Dropping the last source row retires the derived row instead of leaving nulls behind.
+const retiredMember = '10000000-0000-4000-8000-0000000000e2';
+await db.query('insert into auth.users values($1)', [retiredMember]);
+await as(retiredMember);
+await db.query(`select save_profile_bundle($1,'{}','{}',null)`, [
+  { handle: 'retired_member', display_name: 'Retired Member', home_area: 'Singapore', birth_year: 1995 },
+]);
+await db.query('insert into trait_personality(user_id,extraversion,openness,answered) values($1,0.6,0.7,8)', [retiredMember]);
+await db.query('insert into trait_experience(user_id,novelty,answered) values($1,0.4,4)', [retiredMember]);
+await db.exec('reset role');
+await db.query('delete from trait_experience where user_id=$1', [retiredMember]);
+assert.equal((await db.query('select count(*)::int n from behavior.matrix where user_id=$1', [retiredMember])).rows[0].n, 1);
+await db.query('delete from trait_personality where user_id=$1', [retiredMember]);
+assert.equal((await db.query('select count(*)::int n from behavior.matrix where user_id=$1', [retiredMember])).rows[0].n, 0);
+console.log('Passed member erasure through the behavior sync trigger and retirement of the derived matrix row.');
 await db.close();
