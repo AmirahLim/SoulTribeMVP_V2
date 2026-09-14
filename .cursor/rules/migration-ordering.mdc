@@ -11,4 +11,4 @@ That script refuses when the migration is uncommitted, when `HEAD` is ahead of t
 
 A database ahead of committed code cannot be explained, reviewed or rebuilt. Four commits sat unpushed while their migrations were applied live; V1 drifted the same way from the other direction. This is a gate, not a preference.
 
-Automatic Actions triggers are not firing, so a push is not a green run. Dispatch with `gh workflow run verify.yml --ref main` and wait.
+A push starts `Verify MVP`. Wait for that run to pass for this exact commit; a push that has not finished is not a pass.

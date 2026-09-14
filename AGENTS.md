@@ -45,7 +45,7 @@ No migration runs against a live database until the commit containing it is push
 
 A database ahead of committed code cannot be explained, reviewed or rebuilt: the repo describes a schema that does not exist yet, and the schema contains objects no commit accounts for. This has happened in both directions already, so it is a gate rather than a preference.
 
-Automatic Actions triggers are not currently firing on this repository, so CI must be dispatched by hand with `gh workflow run verify.yml --ref main`. Until that is fixed, a green run is never implied by a push.
+A push to GitHub starts `Verify MVP`. A green run is still required for that exact commit before a live migration; a push that has not finished is not a pass.
 
 ## Anti-fabrication is enforced, not requested
 
