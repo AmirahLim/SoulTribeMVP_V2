@@ -773,4 +773,19 @@ assert.ok(ledgerAfter.updated_at >= ledgerBefore);
 await db.query('delete from profiles where id=$1', [ledgerMember]);
 assert.equal((await db.query('select count(*)::int n from avatar_backfill where user_id=$1', [ledgerMember])).rows[0].n, 0);
 console.log('Passed avatar backfill ledger owner denial, state and size constraints, update stamping, cascade cleanup and repeatable migration.');
+
+// outings is read by host, by state and ordered by starts_at. Without these it has
+// only outings_pkey, so anything other than a lookup by id reads the whole table.
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../supabase/migrations/20261015000000_outings_query_indexes.sql', import.meta.url), 'utf8'));
+const outingIndexes = (await db.query(
+  "select indexname,indexdef from pg_indexes where schemaname='public' and tablename='outings' order by indexname",
+)).rows;
+assert.deepEqual(outingIndexes.map((row) => row.indexname),
+  ['outings_host_id_starts_at_idx', 'outings_live_state_starts_at_idx', 'outings_pkey']);
+assert.match(outingIndexes.find((r) => r.indexname === 'outings_host_id_starts_at_idx').indexdef, /\(host_id, starts_at\)/);
+const liveStateIndex = outingIndexes.find((r) => r.indexname === 'outings_live_state_starts_at_idx').indexdef;
+assert.match(liveStateIndex, /\(state, starts_at\)/);
+assert.match(liveStateIndex, /WHERE \(state = ANY \(ARRAY\['open'::text, 'confirmed'::text\]\)\)/i);
+console.log('Passed outings host and live-state index coverage with a repeatable migration.');
 await db.close();
