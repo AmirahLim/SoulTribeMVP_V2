@@ -791,7 +791,8 @@ console.log('Passed outings host and live-state index coverage with a repeatable
 
 // outing_messages is read by outing_id, newest first, limited to 50. blocks is
 // read as blocker_id = uid or blocked_id = uid; the primary key only leads on
-// blocker_id. reports stays on reports_pkey until a plan actually uses more.
+// blocker_id. reports pair indexes are added with the matching-pool exclusion,
+// not by the chat/blocks index migration.
 await db.exec('reset role');
 await db.exec(await readFile(new URL('../supabase/migrations/20261018000000_chat_and_blocks_indexes.sql', import.meta.url), 'utf8'));
 const messageIndexes = (await db.query(
@@ -815,7 +816,11 @@ assert.match(
 const reportIndexes = (await db.query(
   "select indexname from pg_indexes where schemaname='public' and tablename='reports' order by indexname",
 )).rows.map((row) => row.indexname);
-assert.deepEqual(reportIndexes, ['reports_pkey']);
+assert.deepEqual(reportIndexes, [
+  'reports_pkey',
+  'reports_reported_id_reporter_id_idx',
+  'reports_reporter_id_reported_id_idx',
+]);
 console.log('Passed outing_messages and blocks index coverage with a repeatable migration.');
 
 // behavior.matrix is derived from two trait tables by a trigger that also fires on
@@ -927,6 +932,77 @@ assert.deepEqual(
   (await db.query('select user_id from filter_local_area_ids()')).rows,
   [],
 );
+await db.exec('reset role');
+await db.query('delete from blocks where blocker_id=$1 and blocked_id=$2', [areaViewer, areaPeer]);
+
+for (let i = 0; i < 2; i++) {
+  await db.exec(await readFile(
+    new URL('../supabase/migrations/20261023000000_filter_exclude_reports.sql', import.meta.url), 'utf8'));
+}
+assert.ok((await db.query(
+  `select indexname from pg_indexes where tablename='reports' and indexname in ('reports_reporter_id_reported_id_idx','reports_reported_id_reporter_id_idx')`,
+)).rows.length === 2);
+await db.exec('set enable_seqscan = off');
+const reportPlan = (await db.query(
+  `explain (costs off) select 1 from public.reports r where (r.reporter_id=$1 and r.reported_id=$2) or (r.reporter_id=$2 and r.reported_id=$1)`,
+  [areaViewer, areaPeer],
+)).rows.map((row) => row['QUERY PLAN']).join('\n');
+await db.exec('set enable_seqscan = on');
+console.log('Report exclusion predicate plan:\n' + reportPlan);
+assert.match(reportPlan, /reports_reporter_id_reported_id_idx|reports_reported_id_reporter_id_idx|Index Only Scan|Index Scan/);
+
+await as(host);
+const onlineWithoutReports = (await db.query('select user_id from filter_local_online_ids(5000) order by user_id')).rows.map((row) => row.user_id);
+assert.deepEqual(onlineWithoutReports, [guest]);
+await as(areaViewer);
+const areaWithoutReports = (await db.query('select user_id from filter_local_area_ids() order by user_id')).rows.map((row) => row.user_id);
+assert.deepEqual(areaWithoutReports, [areaPeer]);
+
+await db.exec('reset role');
+await db.query("insert into reports(reporter_id,reported_id,category) values($1,$2,'harassment')", [host, guest]);
+await as(host);
+assert.deepEqual((await db.query('select user_id from filter_local_online_ids(5000)')).rows, []);
+await as(guest);
+assert.deepEqual((await db.query('select user_id from filter_local_online_ids(5000)')).rows, []);
+await db.exec('reset role');
+await db.query('delete from reports where reporter_id=$1 and reported_id=$2', [host, guest]);
+await db.query("insert into reports(reporter_id,reported_id,category) values($1,$2,'harassment')", [guest, host]);
+await as(host);
+assert.deepEqual((await db.query('select user_id from filter_local_online_ids(5000)')).rows, []);
+await as(guest);
+assert.deepEqual((await db.query('select user_id from filter_local_online_ids(5000)')).rows, []);
+await db.exec('reset role');
+await db.query('delete from reports where reporter_id=$1 and reported_id=$2', [guest, host]);
+await as(host);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_online_ids(5000) order by user_id')).rows.map((row) => row.user_id),
+  onlineWithoutReports,
+);
+
+await db.exec('reset role');
+await db.query("insert into reports(reporter_id,reported_id,category) values($1,$2,'harassment')", [areaViewer, areaPeer]);
+await as(areaViewer);
+assert.deepEqual((await db.query('select user_id from filter_local_area_ids()')).rows, []);
+await as(areaPeer);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_area_ids()')).rows.map((row) => row.user_id),
+  [],
+);
+await db.exec('reset role');
+await db.query('delete from reports where reporter_id=$1 and reported_id=$2', [areaViewer, areaPeer]);
+await db.query("insert into reports(reporter_id,reported_id,category) values($1,$2,'harassment')", [areaPeer, areaViewer]);
+await as(areaViewer);
+assert.deepEqual((await db.query('select user_id from filter_local_area_ids()')).rows, []);
+await as(areaPeer);
+assert.deepEqual((await db.query('select user_id from filter_local_area_ids()')).rows, []);
+await db.exec('reset role');
+await db.query('delete from reports where reporter_id=$1 and reported_id=$2', [areaPeer, areaViewer]);
+await as(areaViewer);
+assert.deepEqual(
+  (await db.query('select user_id from filter_local_area_ids() order by user_id')).rows.map((row) => row.user_id),
+  areaWithoutReports,
+);
+console.log('Passed report exclusion from both local ID filters in both directions.');
 console.log('Passed 15-minute presence expiry on read and same-area ID fallback without coordinates.');
 
 // Writer spend is a service-role ledger. Caps are in the table; member sessions
