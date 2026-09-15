@@ -13,7 +13,8 @@ import { adaptRowToUserData } from '../../../lib/profileRowAdapter';
 import { toProfileVector } from '../../../lib/profileAdapter';
 import { getMatchExplanations } from '../../../lib/matchExplanationCache';
 import { MATCH_RADIUS_MAX_METERS, MATCH_RADIUS_MIN_METERS, radiusMetersFromOnboarding } from '../../../lib/onboardingSpatial';
-import {loadRosterEvidence,evidenceHash} from '../../../lib/readEngine/server';
+import {loadRosterEvidence} from '../../../lib/readEngine/server';
+import {activityKey,matchResultFromCache,readMatchScores,scoreCacheRow,writeMatchScores} from '../../../lib/matchScoreCache';
 
 export const runtime = 'nodejs';
 
@@ -170,7 +171,6 @@ export async function POST(req: NextRequest) {
       });
       if (auditError) {
         console.error('[SoulTribe] matching timing audit failed',{code:auditError.code,message:auditError.message});
-        throw new Error(auditError.message);
       }
     };
     const emptyHeaders = (emptyReason: string) => ({
@@ -311,11 +311,21 @@ export async function POST(req: NextRequest) {
     const rankedMatches = [];
     const candidateVecMap = new Map();
     const matchResMap = new Map();
+    const scoringActivity=activityKey(body.activityCategory);
+    const cachedScores=await readMatchScores(adminClient,authUserId,scoringActivity,candidates.map(row=>row.id));
+    const scoreWrites=[];
 
     for (const candRow of candidates) {
       const candVec = toProfileVector(adaptRowToUserData(candRow), candRow.id);
-
-      const matchRes = score(viewerVec, candVec, context);
+      const hit=cachedScores.get(candRow.id);
+      const cached=Boolean(hit&&hit.version_a===viewerRow.profile_version&&hit.version_b===candRow.profile_version);
+      const matchRes=cached&&hit?matchResultFromCache(hit,viewerVec,candVec):score(viewerVec, candVec, context);
+      if(!cached){
+        scoreWrites.push(scoreCacheRow({
+          viewerId:authUserId,candidateId:candRow.id,activity:scoringActivity,
+          versionA:viewerRow.profile_version,versionB:candRow.profile_version,result:matchRes,
+        }));
+      }
       const softRes = softGate(matchRes, { provisionalFloor: 0.0 });
       if (!softRes.eligible) continue;
 
@@ -339,6 +349,7 @@ export async function POST(req: NextRequest) {
     }
 
     rankedMatches.sort((a, b) => b.rankScore - a.rankScore);
+    await writeMatchScores(adminClient,scoreWrites);
     const scoringMs = performance.now()-scoringStarted;
     const shortlisted = rankedMatches.slice(0,resultLimit);
     // Photos cannot change ranking, gating or explanation wording, so they load
@@ -357,9 +368,6 @@ export async function POST(req: NextRequest) {
     const {explanations,metrics} = await getMatchExplanations(adminClient,
       {row:viewerRow,vector:viewerVec},
       shortlisted.map(item=>({row:candidateRows.get(item.id)!,vector:candidateVecMap.get(item.id)!})),bundles);
-    const fresh=await loadRosterEvidence(evidenceClient,authUserId,shortlisted.map(item=>item.id));
-    if([...bundles].some(([id,b])=>!fresh.has(id)||evidenceHash(b)!==evidenceHash(fresh.get(id)!)))
-      throw new Error('Matching evidence changed while the reading was prepared. Please retry.');
     const returnedMatches = shortlisted.map(item=>({
       ...item,avatarUrl:avatarById.get(item.id) || getGenderAvatarForName(item.name),
       clickText:explanations.get(item.id)!.click_text,rubText:explanations.get(item.id)!.friction_text,

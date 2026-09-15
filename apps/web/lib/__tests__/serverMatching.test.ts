@@ -4,7 +4,7 @@ import { getRankedMatches, RankedMatch } from '../matching';
 import { POST } from '../../app/api/matches/route';
 import { NextRequest } from 'next/server';
 import { evaluateGates } from '@soul-tribe/core';
-const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],rpcIds:null as string[] | null,areaIds:[] as string[],calls:[] as string[],rpcRadius:null as number | null,baseline:{
+const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],scoreRows:[] as any[],scoreWrites:[] as any[],evidenceReads:0,auditError:null as {code?:string;message:string}|null,rpcIds:null as string[] | null,areaIds:[] as string[],calls:[] as string[],rpcRadius:null as number | null,baseline:{
   travelKm:10,
   intent:['Close circle'],
   clicks:['Our humour just lands'],
@@ -62,7 +62,10 @@ vi.mock('@supabase/supabase-js', () => {
           })),
         },
         from: (table: string) => {
-          if(table==='read_answer_sources')return {select:()=>({in:async()=>({data:[],error:null})})};
+          if(table==='read_answer_sources'){
+            cacheTestState.evidenceReads++;
+            return {select:()=>({in:async()=>({data:[],error:null})})};
+          }
           if (table === 'match_explanations') return {
             select:()=>({eq:()=>({in:async()=>({data:[],error:null})})}),
             upsert:async(rows:any[])=>{cacheTestState.writes.push(...rows);return {error:null};},
@@ -173,7 +176,27 @@ vi.mock('@supabase/supabase-js', () => {
             };
           }
           if (table === 'recommendation_preferences') return { select: () => ({eq: () => ({maybeSingle: async () => ({data:null,error:null})})}) };
-          if (table === 'interaction_events') return { insert: async () => ({error:null}) };
+          if (table === 'match_scores') {
+            const q: {select:()=>unknown;eq:()=>unknown;in:()=>unknown;upsert:(rows:unknown[])=>unknown} = {
+              select: () => q,
+              eq: () => q,
+              in: async () => ({ data: cacheTestState.scoreRows, error: null }),
+              upsert: async (rows: unknown[]) => {
+                cacheTestState.scoreWrites.push(...rows);
+                for (const row of rows as {user_a:string;user_b:string;activity_key:string}[]) {
+                  const i = cacheTestState.scoreRows.findIndex(
+                    (existing:{user_a:string;user_b:string;activity_key:string}) =>
+                      existing.user_a===row.user_a&&existing.user_b===row.user_b&&existing.activity_key===row.activity_key,
+                  );
+                  if (i>=0) cacheTestState.scoreRows[i]=row;
+                  else cacheTestState.scoreRows.push(row);
+                }
+                return { error: null };
+              },
+            };
+            return q;
+          }
+          if (table === 'interaction_events') return { insert: async () => ({error:cacheTestState.auditError}) };
           return {
             select: () => ({
               eq: () => ({
@@ -191,7 +214,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
   const oldEnv = process.env;
 
   beforeEach(() => {
-    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.rpcIds=null;cacheTestState.areaIds=[];cacheTestState.calls=[];cacheTestState.rpcRadius=null;
+    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.scoreRows=[];cacheTestState.scoreWrites=[];cacheTestState.evidenceReads=0;cacheTestState.auditError=null;cacheTestState.rpcIds=null;cacheTestState.areaIds=[];cacheTestState.calls=[];cacheTestState.rpcRadius=null;
     process.env = {
       ...oldEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -478,5 +501,40 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
 
     const json = await res.json();
     expect(json.error).toBe('Server matching is unconfigured: missing SUPABASE_SECRET_KEY');
+  });
+
+  it('writes directed scores and reuses them on the next request', async () => {
+    const first = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(first.status).toBe(200);
+    expect(cacheTestState.scoreWrites.length).toBeGreaterThan(0);
+    expect(cacheTestState.scoreWrites.every((row:{user_a:string})=>row.user_a==='viewer-1')).toBe(true);
+    expect(cacheTestState.scoreWrites.some((row:{user_a:string;user_b:string})=>row.user_a===row.user_b)).toBe(false);
+    const firstWrites = cacheTestState.scoreWrites.length;
+    cacheTestState.scoreWrites = [];
+    const second = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(second.status).toBe(200);
+    expect(cacheTestState.scoreWrites).toHaveLength(0);
+    expect(firstWrites).toBeGreaterThan(0);
+  });
+
+  it('still returns matches when the audit insert fails', async () => {
+    cacheTestState.auditError = { code: '57014', message: 'statement timeout' };
+    const res = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' },
+    }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).not.toEqual([]);
+  });
+
+  it('loads roster evidence once per request', async () => {
+    const res = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(res.status).toBe(200);
+    expect(cacheTestState.evidenceReads).toBe(1);
   });
 });

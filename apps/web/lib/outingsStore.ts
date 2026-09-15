@@ -546,6 +546,8 @@ export async function declineInvite(outingId: string, userId: string): Promise<v
   }
 }
 
+export const RADAR_LIMIT = 50;
+
 /**
  * Fetch open outings for "On Your Radar".
  * Propagates query errors so UI can render explicit error state.
@@ -558,7 +560,7 @@ export async function fetchRadarOutings(userId?: string): Promise<OutingItem[]> 
 
   const client = getSupabaseBrowserClient();
   const { data: outingRows, error } = await client
-    .from('outings')
+    .from('active_pitches')
     .select(`
       id,
       host_id,
@@ -567,13 +569,20 @@ export async function fetchRadarOutings(userId?: string): Promise<OutingItem[]> 
       activity_category,
       area,
       starts_at,
+      duration_minutes,
       max_participants,
       visibility,
       state,
-      profiles!outings_host_id_fkey (display_name, avatar_url),
-      outing_members (user_id, state)
+      is_demo,
+      cover_image_url,
+      cover_image_thumb_url,
+      cover_image_alt,
+      cover_photographer_name,
+      cover_photographer_url,
+      cover_download_location
     `)
-    .eq('state', 'open');
+    .order('starts_at')
+    .limit(RADAR_LIMIT);
 
   if (error) {
     console.error('[SoulTribe] Supabase query error in fetchRadarOutings:', {
@@ -589,22 +598,64 @@ export async function fetchRadarOutings(userId?: string): Promise<OutingItem[]> 
     return [];
   }
 
+  const outingIds = outingRows.map((out: { id: string }) => out.id);
+  const hostIds = [...new Set(outingRows.map((out: { host_id: string }) => out.host_id).filter(Boolean))];
+  const [{ data: hostRows, error: hostError }, { data: memberRows, error: memberError }] = await Promise.all([
+    hostIds.length
+      ? client.from('profiles').select('id, display_name, avatar_url, is_demo').in('id', hostIds)
+      : Promise.resolve({ data: [], error: null }),
+    outingIds.length
+      ? client.from('outing_members').select('outing_id, user_id, state').in('outing_id', outingIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (hostError) {
+    console.error('[SoulTribe] Supabase query error in fetchRadarOutings:', {
+      code: hostError.code,
+      message: hostError.message,
+      details: hostError.details,
+      hint: hostError.hint,
+    });
+    throw new Error(`[Supabase ${hostError.code || 'ERROR'}] ${hostError.message}`);
+  }
+  if (memberError) {
+    console.error('[SoulTribe] Supabase query error in fetchRadarOutings:', {
+      code: memberError.code,
+      message: memberError.message,
+      details: memberError.details,
+      hint: memberError.hint,
+    });
+    throw new Error(`[Supabase ${memberError.code || 'ERROR'}] ${memberError.message}`);
+  }
+  const hosts = new Map((hostRows ?? []).map((row: { id: string }) => [row.id, row]));
+  const membersByOuting = new Map<string, { user_id: string; state: string }[]>();
+  for (const row of memberRows ?? []) {
+    const list = membersByOuting.get(row.outing_id) ?? [];
+    list.push(row);
+    membersByOuting.set(row.outing_id, list);
+  }
+
   // Hard demo rule: filter out own outings AND any demo outings
-  const filteredRows = (outingRows || []).filter((out: any) => {
+  const filteredRows = outingRows.filter((out: { host_id: string; is_demo?: boolean }) => {
     if (out.host_id === userId) return false;
-    const hostProfile = Array.isArray(out.profiles) ? out.profiles[0] : out.profiles;
-    const isDemo = Boolean((out as any).is_demo || (hostProfile as any)?.is_demo);
+    const hostProfile = hosts.get(out.host_id) as { is_demo?: boolean } | undefined;
+    const isDemo = Boolean(out.is_demo || hostProfile?.is_demo);
     if (userId && isDemo) return false;
     return true;
   });
 
-  return filteredRows.map((out: any) => {
-    const hostProfile = Array.isArray(out.profiles) ? out.profiles[0] : out.profiles;
+  return filteredRows.map((out: {
+    id: string; title: string; pitch?: string; area?: string; activity_category?: string;
+    starts_at?: string; duration_minutes?: number; state?: string; host_id: string;
+    max_participants?: number; cover_image_url?: string; cover_image_thumb_url?: string;
+    cover_image_alt?: string; cover_photographer_name?: string; cover_photographer_url?: string;
+    cover_download_location?: string; is_demo?: boolean;
+  }) => {
+    const hostProfile = hosts.get(out.host_id) as { display_name?: string; avatar_url?: string; is_demo?: boolean } | undefined;
     const hostName = hostProfile?.display_name || '';
     const hostAvatar = hostProfile?.avatar_url || (hostName ? getGenderAvatarForName(hostName) : '');
-    const members = Array.isArray(out.outing_members) ? out.outing_members : [];
-    const seatsFilled = members.filter((m: any) => m.state === 'accepted').length;
-    const isHostDemo = Boolean((hostProfile as any)?.is_demo || (out as any).is_demo);
+    const members = membersByOuting.get(out.id) ?? [];
+    const seatsFilled = members.filter((m) => m.state === 'accepted').length;
+    const isHostDemo = Boolean(hostProfile?.is_demo || out.is_demo);
 
     let dateTimeStr = '';
     if (out.starts_at) {
@@ -642,7 +693,7 @@ export async function fetchRadarOutings(userId?: string): Promise<OutingItem[]> 
       cover_photographer_name: out.cover_photographer_name,
       cover_photographer_url: out.cover_photographer_url,
       cover_download_location: out.cover_download_location,
-      fitBadge: undefined, // Fit badge is ONLY calculated by engine, never typed or hardcoded
+      fitBadge: undefined,
     };
   });
 }

@@ -78,10 +78,9 @@ function PersonDetailContent() {
         }
       });
     getSupabaseBrowserClient()
-      .from('outings')
+      .from('active_pitches')
       .select('id,title,area')
       .eq('host_id', id)
-      .in('state', ['open', 'confirmed'])
       .order('starts_at')
       .limit(6)
       .then(({ data }) => {

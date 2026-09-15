@@ -997,4 +997,49 @@ assert.equal(stillReserved.output_tokens, null);
 
 await db.query("update writer_budget_limits set global_cap_usd_micros=25000000, member_cap_usd_micros=1000000 where id");
 console.log('Passed writer budget caps, reclaim, member isolation, malformed settle and session denial.');
+
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../supabase/migrations/20261020000000_directed_match_scores.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261021000000_active_pitches.sql', import.meta.url), 'utf8'));
+const orderedPair = (await db.query(
+  `select conname from pg_constraint where conrelid='public.match_scores'::regclass and contype='c' and pg_get_constraintdef(oid) ilike '%user_a%<%user_b%'`,
+)).rows;
+assert.equal(orderedPair.length, 0);
+await db.query(
+  `insert into match_scores(user_a,user_b,activity_key,scoring_version,resonance,logistics,rank_score,gated,contributions,version_a,version_b)
+   values ($1,$2,'','match-score/1',0.91,0.8,0.86,false,'{}'::jsonb,1,1)`,
+  [guest, host],
+);
+await db.query(
+  `insert into match_scores(user_a,user_b,activity_key,scoring_version,resonance,logistics,rank_score,gated,contributions,version_a,version_b)
+   values ($1,$2,'','match-score/1',0.4,0.5,0.42,false,'{}'::jsonb,1,1)`,
+  [host, guest],
+);
+assert.equal((await db.query('select count(*)::int n from match_scores')).rows[0].n, 2);
+assert.notEqual(
+  (await db.query('select rank_score from match_scores where user_a=$1 and user_b=$2', [guest, host])).rows[0].rank_score,
+  (await db.query('select rank_score from match_scores where user_a=$1 and user_b=$2', [host, guest])).rows[0].rank_score,
+);
+await as(host);
+await fails('select * from match_scores', /permission denied/);
+await db.exec('reset role');
+console.log('Passed directed match_scores cache and member isolation.');
+
+const pastOuting = '20000000-0000-4000-8000-000000000099';
+const futureOuting = '20000000-0000-4000-8000-000000000098';
+await db.query(
+  `insert into outings(id,host_id,title,pitch,activity_category,area,starts_at,duration_minutes,budget_band,orientation,setting,max_participants,visibility,state)
+   values ($1,$2,'Yesterday coffee','A pitch that already happened last night','coffee','Central',now()-interval '2 days',60,1,'either','quiet',2,'requestable','open'),
+          ($3,$2,'Tomorrow coffee','A pitch that has not started yet','coffee','Central',now()+interval '2 days',60,1,'either','quiet',2,'requestable','open')`,
+  [pastOuting, host, futureOuting],
+);
+const liveIds = (await db.query('select id from active_pitches order by starts_at')).rows.map((row) => String(row.id));
+assert.equal(liveIds.includes(pastOuting), false);
+assert.equal(liveIds.includes(futureOuting), true);
+await as(guest);
+assert.equal(
+  (await db.query('select id from active_pitches where id=$1', [futureOuting])).rows.length,
+  1,
+);
+console.log('Passed active_pitches excluding finished open rows.');
 await db.close();

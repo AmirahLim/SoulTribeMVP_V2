@@ -104,6 +104,15 @@ vi.mock('@supabase/supabase-js', () => {
           select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
         };
         if (table === 'interaction_events') return { insert: async () => ({ error: null }) };
+        if (table === 'match_scores') {
+          const q: Record<string, unknown> = {
+            select: () => q,
+            eq: () => q,
+            in: async () => ({ data: [], error: null }),
+            upsert: async () => ({ error: null }),
+          };
+          return q;
+        }
         return { select: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) };
       },
     })),
