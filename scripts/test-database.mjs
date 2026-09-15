@@ -1001,10 +1001,17 @@ console.log('Passed writer budget caps, reclaim, member isolation, malformed set
 await db.exec('reset role');
 await db.exec(await readFile(new URL('../supabase/migrations/20261020000000_directed_match_scores.sql', import.meta.url), 'utf8'));
 await db.exec(await readFile(new URL('../supabase/migrations/20261021000000_active_pitches.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261022000000_match_scores_small_pool.sql', import.meta.url), 'utf8'));
 const orderedPair = (await db.query(
   `select conname from pg_constraint where conrelid='public.match_scores'::regclass and contype='c' and pg_get_constraintdef(oid) ilike '%user_a%<%user_b%'`,
 )).rows;
 assert.equal(orderedPair.length, 0);
+assert.match(
+  (await db.query(
+    `select pg_get_constraintdef(oid) as def from pg_constraint where conrelid='public.match_scores'::regclass and contype='p'`,
+  )).rows[0].def,
+  /small_pool/,
+);
 await db.query(
   `insert into match_scores(user_a,user_b,activity_key,scoring_version,resonance,logistics,rank_score,gated,contributions,version_a,version_b)
    values ($1,$2,'','match-score/1',0.91,0.8,0.86,false,'{}'::jsonb,1,1)`,
@@ -1015,13 +1022,22 @@ await db.query(
    values ($1,$2,'','match-score/1',0.4,0.5,0.42,false,'{}'::jsonb,1,1)`,
   [host, guest],
 );
-assert.equal((await db.query('select count(*)::int n from match_scores')).rows[0].n, 2);
+await db.query(
+  `insert into match_scores(user_a,user_b,activity_key,small_pool,scoring_version,resonance,logistics,rank_score,gated,contributions,version_a,version_b)
+   values ($1,$2,'',true,'match-score/1',0.91,0.8,0.86,false,'{}'::jsonb,1,1)`,
+  [guest, host],
+);
+assert.equal((await db.query('select count(*)::int n from match_scores')).rows[0].n, 3);
 assert.notEqual(
-  (await db.query('select rank_score from match_scores where user_a=$1 and user_b=$2', [guest, host])).rows[0].rank_score,
-  (await db.query('select rank_score from match_scores where user_a=$1 and user_b=$2', [host, guest])).rows[0].rank_score,
+  (await db.query('select rank_score from match_scores where user_a=$1 and user_b=$2 and small_pool=false', [guest, host])).rows[0].rank_score,
+  (await db.query('select rank_score from match_scores where user_a=$1 and user_b=$2 and small_pool=false', [host, guest])).rows[0].rank_score,
 );
 await as(host);
 await fails('select * from match_scores', /permission denied/);
+assert.equal(
+  (await db.query(`select has_table_privilege('authenticated','public.match_scores','select') as allowed`)).rows[0].allowed,
+  false,
+);
 await db.exec('reset role');
 console.log('Passed directed match_scores cache and member isolation.');
 

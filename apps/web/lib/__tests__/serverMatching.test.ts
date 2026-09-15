@@ -4,7 +4,7 @@ import { getRankedMatches, RankedMatch } from '../matching';
 import { POST } from '../../app/api/matches/route';
 import { NextRequest } from 'next/server';
 import { evaluateGates } from '@soul-tribe/core';
-const cacheTestState=vi.hoisted(()=>({extra:0,writes:[] as any[],scoreRows:[] as any[],scoreWrites:[] as any[],evidenceReads:0,auditError:null as {code?:string;message:string}|null,rpcIds:null as string[] | null,areaIds:[] as string[],calls:[] as string[],rpcRadius:null as number | null,baseline:{
+const cacheTestState=vi.hoisted(()=>({extra:0,profileVersion:1,writes:[] as any[],scoreRows:[] as any[],scoreWrites:[] as any[],evidenceReads:0,auditError:null as {code?:string;message:string}|null,rpcIds:null as string[] | null,areaIds:[] as string[],calls:[] as string[],rpcRadius:null as number | null,baseline:{
   travelKm:10,
   intent:['Close circle'],
   clicks:['Our humour just lands'],
@@ -155,8 +155,8 @@ vi.mock('@supabase/supabase-js', () => {
                     ];
             rows.push(...Array.from({length:cacheTestState.extra},(_,i)=>({...rows[1],id:'extra-candidate-'+i})));
             const q: any = {
-              in: async (_key:string,ids:string[])=>({data:rows.filter(r=>ids.includes(r.id)).map(r=>({...r,profile_version:1,explanation_revision:0})),error:null}),
-              eq: (key: string, value: any) => { rows = rows.filter(r => r[key] === value).map(r=>({...r,profile_version:1,explanation_revision:0})); return q; },
+              in: async (_key:string,ids:string[])=>({data:rows.filter(r=>ids.includes(r.id)).map(r=>({...r,profile_version:cacheTestState.profileVersion,explanation_revision:0})),error:null}),
+              eq: (key: string, value: any) => { rows = rows.filter(r => r[key] === value).map(r=>({...r,profile_version:cacheTestState.profileVersion,explanation_revision:0})); return q; },
               limit: async () => ({ data: rows, error: null }),
               maybeSingle: async () => ({ data: rows[0] || null, error: null }),
             };
@@ -177,16 +177,26 @@ vi.mock('@supabase/supabase-js', () => {
           }
           if (table === 'recommendation_preferences') return { select: () => ({eq: () => ({maybeSingle: async () => ({data:null,error:null})})}) };
           if (table === 'match_scores') {
-            const q: {select:()=>unknown;eq:()=>unknown;in:()=>unknown;upsert:(rows:unknown[])=>unknown} = {
+            const filters: Record<string, unknown> = {};
+            const q: {select:()=>unknown;eq:(key:string,value:unknown)=>unknown;in:(key:string,ids:string[])=>unknown;upsert:(rows:unknown[])=>unknown} = {
               select: () => q,
-              eq: () => q,
-              in: async () => ({ data: cacheTestState.scoreRows, error: null }),
+              eq: (key: string, value: unknown) => { filters[key] = value; return q; },
+              in: async (_key: string, ids: string[]) => ({
+                data: cacheTestState.scoreRows.filter((row: {user_a:string;activity_key:string;scoring_version:string;small_pool:boolean;user_b:string}) =>
+                  row.user_a===filters.user_a
+                  && row.activity_key===filters.activity_key
+                  && row.scoring_version===filters.scoring_version
+                  && row.small_pool===filters.small_pool
+                  && ids.includes(row.user_b)),
+                error: null,
+              }),
               upsert: async (rows: unknown[]) => {
                 cacheTestState.scoreWrites.push(...rows);
-                for (const row of rows as {user_a:string;user_b:string;activity_key:string}[]) {
+                for (const row of rows as {user_a:string;user_b:string;activity_key:string;small_pool:boolean}[]) {
                   const i = cacheTestState.scoreRows.findIndex(
-                    (existing:{user_a:string;user_b:string;activity_key:string}) =>
-                      existing.user_a===row.user_a&&existing.user_b===row.user_b&&existing.activity_key===row.activity_key,
+                    (existing:{user_a:string;user_b:string;activity_key:string;small_pool:boolean}) =>
+                      existing.user_a===row.user_a&&existing.user_b===row.user_b
+                      &&existing.activity_key===row.activity_key&&existing.small_pool===row.small_pool,
                   );
                   if (i>=0) cacheTestState.scoreRows[i]=row;
                   else cacheTestState.scoreRows.push(row);
@@ -214,7 +224,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
   const oldEnv = process.env;
 
   beforeEach(() => {
-    cacheTestState.extra=0;cacheTestState.writes=[];cacheTestState.scoreRows=[];cacheTestState.scoreWrites=[];cacheTestState.evidenceReads=0;cacheTestState.auditError=null;cacheTestState.rpcIds=null;cacheTestState.areaIds=[];cacheTestState.calls=[];cacheTestState.rpcRadius=null;
+    cacheTestState.extra=0;cacheTestState.profileVersion=1;cacheTestState.writes=[];cacheTestState.scoreRows=[];cacheTestState.scoreWrites=[];cacheTestState.evidenceReads=0;cacheTestState.auditError=null;cacheTestState.rpcIds=null;cacheTestState.areaIds=[];cacheTestState.calls=[];cacheTestState.rpcRadius=null;
     process.env = {
       ...oldEnv,
       NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
@@ -511,6 +521,7 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     expect(cacheTestState.scoreWrites.length).toBeGreaterThan(0);
     expect(cacheTestState.scoreWrites.every((row:{user_a:string})=>row.user_a==='viewer-1')).toBe(true);
     expect(cacheTestState.scoreWrites.some((row:{user_a:string;user_b:string})=>row.user_a===row.user_b)).toBe(false);
+    expect(cacheTestState.scoreWrites.every((row:{small_pool:boolean})=>row.small_pool===true)).toBe(true);
     const firstWrites = cacheTestState.scoreWrites.length;
     cacheTestState.scoreWrites = [];
     const second = await POST(new NextRequest('http://localhost/api/matches', {
@@ -519,6 +530,77 @@ describe('Server-Side Matching & Privacy Protections (Step 6b)', () => {
     expect(second.status).toBe(200);
     expect(cacheTestState.scoreWrites).toHaveLength(0);
     expect(firstWrites).toBeGreaterThan(0);
+  });
+
+  it('does not reuse a small-pool row after the pool grows past the gate threshold', async () => {
+    cacheTestState.extra = 6;
+    const small = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(small.status).toBe(200);
+    const smallWrites = cacheTestState.scoreWrites.length;
+    expect(smallWrites).toBe(8);
+    expect(cacheTestState.scoreWrites.every((row:{small_pool:boolean})=>row.small_pool===true)).toBe(true);
+    cacheTestState.scoreWrites = [];
+    cacheTestState.extra = 38;
+    const large = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(large.status).toBe(200);
+    expect(cacheTestState.scoreWrites.length).toBe(40);
+    expect(cacheTestState.scoreWrites.every((row:{small_pool:boolean})=>row.small_pool===false)).toBe(true);
+    const largeWrites = cacheTestState.scoreWrites.length;
+    cacheTestState.scoreWrites = [];
+    const largeAgain = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(largeAgain.status).toBe(200);
+    expect(cacheTestState.scoreWrites).toHaveLength(0);
+    expect(largeWrites).toBe(40);
+  });
+
+  it('hits the cache on a second request at pool size 8 and at pool size 40', async () => {
+    const rates: {pool:number;firstWrites:number;secondWrites:number;hitRate:number}[] = [];
+    for (const extra of [6, 38]) {
+      cacheTestState.extra = extra;
+      cacheTestState.scoreRows = [];
+      cacheTestState.scoreWrites = [];
+      const pool = 2 + extra;
+      const first = await POST(new NextRequest('http://localhost/api/matches', {
+        method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+      }));
+      expect(first.status).toBe(200);
+      const firstWrites = cacheTestState.scoreWrites.length;
+      expect(firstWrites).toBe(pool);
+      cacheTestState.scoreWrites = [];
+      const second = await POST(new NextRequest('http://localhost/api/matches', {
+        method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+      }));
+      expect(second.status).toBe(200);
+      const secondWrites = cacheTestState.scoreWrites.length;
+      expect(secondWrites).toBe(0);
+      rates.push({ pool, firstWrites, secondWrites, hitRate: (pool - secondWrites) / pool });
+    }
+    expect(rates).toEqual([
+      { pool: 8, firstWrites: 8, secondWrites: 0, hitRate: 1 },
+      { pool: 40, firstWrites: 40, secondWrites: 0, hitRate: 1 },
+    ]);
+  });
+
+  it('recomputes cached scores when profile_version changes', async () => {
+    const first = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(first.status).toBe(200);
+    expect(cacheTestState.scoreWrites.length).toBeGreaterThan(0);
+    cacheTestState.scoreWrites = [];
+    cacheTestState.profileVersion = 2;
+    const second = await POST(new NextRequest('http://localhost/api/matches', {
+      method: 'POST', headers: { Authorization: 'Bearer valid_token' }, body: JSON.stringify({ limit: 2 }),
+    }));
+    expect(second.status).toBe(200);
+    expect(cacheTestState.scoreWrites.length).toBeGreaterThan(0);
+    expect(cacheTestState.scoreWrites.every((row:{version_a:number;version_b:number})=>row.version_a===2&&row.version_b===2)).toBe(true);
   });
 
   it('still returns matches when the audit insert fails', async () => {

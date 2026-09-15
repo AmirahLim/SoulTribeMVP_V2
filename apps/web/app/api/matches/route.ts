@@ -311,8 +311,8 @@ export async function POST(req: NextRequest) {
     const rankedMatches = [];
     const candidateVecMap = new Map();
     const matchResMap = new Map();
-    const scoringActivity=activityKey(body.activityCategory);
-    const cachedScores=await readMatchScores(adminClient,authUserId,scoringActivity,candidates.map(row=>row.id));
+    const scoringKey=activityKey(body.activityCategory,candidatesPool.length);
+    const cachedScores=await readMatchScores(adminClient,authUserId,scoringKey.activity,scoringKey.smallPool,candidates.map(row=>row.id));
     const scoreWrites=[];
 
     for (const candRow of candidates) {
@@ -322,7 +322,7 @@ export async function POST(req: NextRequest) {
       const matchRes=cached&&hit?matchResultFromCache(hit,viewerVec,candVec):score(viewerVec, candVec, context);
       if(!cached){
         scoreWrites.push(scoreCacheRow({
-          viewerId:authUserId,candidateId:candRow.id,activity:scoringActivity,
+          viewerId:authUserId,candidateId:candRow.id,activity:scoringKey.activity,smallPool:scoringKey.smallPool,
           versionA:viewerRow.profile_version,versionB:candRow.profile_version,result:matchRes,
         }));
       }
