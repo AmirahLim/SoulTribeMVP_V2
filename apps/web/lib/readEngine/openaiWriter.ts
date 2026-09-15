@@ -29,19 +29,46 @@ export type WriterBudget={
   reserve(request:{model:string;inputBytes:number;maxOutputTokens:number}):Promise<string|null>;
   settle(reservation:string,usage:{inputTokens:number;outputTokens:number}):Promise<void>;
 };
-const enabledWriterBudget:WriterBudget={
-  async reserve(){return 'soul-tribe-read-writer';},
-  async settle(){},
+export type WriterBudgetClient={
+  rpc(fn:string,args:Record<string,unknown>):PromiseLike<{data:unknown;error:{message?:string}|null}>;
 };
+function integerTokens(value:number):boolean{
+  return Number.isSafeInteger(value)&&value>=0;
+}
+/** Service-role RPCs. reserve → null is the refusal; settle is a no-op on malformed usage. */
+export function createWriterBudget(client:WriterBudgetClient,viewerId:string):WriterBudget{
+  return {
+    async reserve(request){
+      if(!viewerId||!request.model||!integerTokens(request.inputBytes)||!integerTokens(request.maxOutputTokens))return null;
+      try{
+        const {data,error}=await client.rpc('reserve_writer_budget',{
+          p_viewer:viewerId,p_model:request.model,p_input_bytes:request.inputBytes,
+          p_max_output_tokens:request.maxOutputTokens,
+        });
+        if(error||typeof data!=='string'||data.length===0)return null;
+        return data;
+      }catch{return null;}
+    },
+    async settle(reservation,usage){
+      if(!reservation||!integerTokens(usage.inputTokens)||!integerTokens(usage.outputTokens))return;
+      await client.rpc('settle_writer_budget',{
+        p_reservation:reservation,p_input_tokens:usage.inputTokens,p_output_tokens:usage.outputTokens,
+      });
+    },
+  };
+}
 /** Production: OPENAI_API_KEY turns the poetic writer on. SOUL_TRIBE_READ_WRITER=0 disables it.
  * Vitest stays offline unless SOUL_TRIBE_READ_WRITER=1.
+ * A viewer is required so the per-member cap can be enforced; without one the writer stays off.
  */
-export function optionalReadWriter(fetcher?:typeof fetch):Writer|undefined {
+export function optionalReadWriter(fetcher?:typeof fetch,viewer?:{id:string;client:WriterBudgetClient}):Writer|undefined {
   if(process.env.SOUL_TRIBE_READ_WRITER==='0')return;
   if(process.env.NODE_ENV==='test'&&process.env.SOUL_TRIBE_READ_WRITER!=='1')return;
   const apiKey=process.env.OPENAI_API_KEY?.trim();
-  if(!apiKey)return;
-  return createOpenAIWriter({apiKey,model:process.env.OPENAI_READ_MODEL||'gpt-4o-mini',budget:enabledWriterBudget,fetcher});
+  if(!apiKey||!viewer?.id)return;
+  const model=process.env.OPENAI_READ_MODEL;
+  return createOpenAIWriter({apiKey,model:model&&model.length>0?model:'gpt-4o-mini',
+    budget:createWriterBudget(viewer.client,viewer.id),fetcher});
 }
 export function createOpenAIWriter(config:{apiKey:string;model:string;budget:WriterBudget;
   fetcher?:typeof fetch}):Writer {

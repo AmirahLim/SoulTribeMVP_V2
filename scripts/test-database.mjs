@@ -928,4 +928,73 @@ assert.deepEqual(
   [],
 );
 console.log('Passed 15-minute presence expiry on read and same-area ID fallback without coordinates.');
+
+// Writer spend is a service-role ledger. Caps are in the table; member sessions
+// cannot read remaining budget. An expired hold is reclaimed on the next reserve.
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../supabase/migrations/20261019000000_writer_budget.sql', import.meta.url), 'utf8'));
+assert.equal((await db.query("select relrowsecurity from pg_class where oid='public.writer_reservations'::regclass")).rows[0].relrowsecurity, true);
+assert.equal((await db.query("select count(*)::int n from pg_policies where tablename in ('writer_reservations','writer_budget_limits','writer_model_rates')")).rows[0].n, 0);
+await as(host);
+await fails('select * from writer_reservations', /permission denied/);
+await fails('select * from writer_budget_limits', /permission denied/);
+await fails('select * from writer_model_rates', /permission denied/);
+await fails(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, /permission denied/, [host]);
+await db.exec('reset role');
+
+async function writerCost(bytes, output) {
+  return (await db.query(
+    `select (ceil($1::numeric * 150000 / 1000000) + ceil($2::numeric * 600000 / 1000000))::bigint as n`,
+    [bytes, output],
+  )).rows[0].n;
+}
+const unitCost = await writerCost(1000, 100);
+assert.ok(unitCost > 0);
+
+await db.query('delete from writer_reservations');
+await db.query("update writer_budget_limits set global_cap_usd_micros=$1, member_cap_usd_micros=$2 where id", [unitCost - 1, 1000000]);
+assert.equal((await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget, null);
+assert.equal((await db.query('select count(*)::int n from writer_reservations')).rows[0].n, 0);
+
+await db.query("update writer_budget_limits set global_cap_usd_micros=$1, member_cap_usd_micros=$2 where id", [unitCost, unitCost]);
+const firstHold = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget;
+assert.ok(firstHold);
+assert.equal((await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget, null);
+await db.query('select settle_writer_budget($1,0,0)', [firstHold]);
+const afterSettle = (await db.query(`select status,input_tokens,output_tokens,settled_usd_micros from writer_reservations where id=$1`, [firstHold])).rows[0];
+assert.equal(afterSettle.status, 'settled');
+assert.equal(afterSettle.input_tokens, 0);
+assert.equal(afterSettle.output_tokens, 0);
+assert.equal(Number(afterSettle.settled_usd_micros), 0);
+const secondHold = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget;
+assert.ok(secondHold);
+assert.notEqual(secondHold, firstHold);
+
+await db.query('delete from writer_reservations');
+await db.query("update writer_budget_limits set global_cap_usd_micros=25000000, member_cap_usd_micros=$1 where id", [unitCost]);
+const hostHold = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget;
+assert.ok(hostHold);
+assert.equal((await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget, null);
+const guestHold = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [guest])).rows[0].reserve_writer_budget;
+assert.ok(guestHold);
+
+await db.query('delete from writer_reservations');
+const staleHold = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget;
+assert.ok(staleHold);
+await db.query("update writer_reservations set expires_at=now()-interval '1 second' where id=$1", [staleHold]);
+const reclaimed = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget;
+assert.ok(reclaimed);
+assert.equal((await db.query('select status from writer_reservations where id=$1', [staleHold])).rows[0].status, 'reclaimed');
+
+await db.query('delete from writer_reservations');
+const liveHold = (await db.query(`select reserve_writer_budget($1,'gpt-4o-mini',1000,100)`, [host])).rows[0].reserve_writer_budget;
+assert.ok(liveHold);
+await fails('select settle_writer_budget($1,-1,4)', /non-negative integer/, [liveHold]);
+const stillReserved = (await db.query('select status,input_tokens,output_tokens from writer_reservations where id=$1', [liveHold])).rows[0];
+assert.equal(stillReserved.status, 'reserved');
+assert.equal(stillReserved.input_tokens, null);
+assert.equal(stillReserved.output_tokens, null);
+
+await db.query("update writer_budget_limits set global_cap_usd_micros=25000000, member_cap_usd_micros=1000000 where id");
+console.log('Passed writer budget caps, reclaim, member isolation, malformed settle and session denial.');
 await db.close();

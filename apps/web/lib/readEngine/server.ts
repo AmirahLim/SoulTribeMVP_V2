@@ -90,7 +90,7 @@ export async function loadRosterEvidence(client:SupabaseClient,viewer:string,ids
 }
 /** Fresh authorisation/evidence must precede every call, including cache hits. */
 export async function cachedRead(client:SupabaseClient,viewer:string,subject:string,bundle:EvidenceBundle,writer?:Writer,writerVersion?:string){
-  const activeWriter=writer??optionalReadWriter();
+  const activeWriter=writer??optionalReadWriter(undefined,{id:viewer,client});
   writerVersion=(activeWriter?WRITER_PROMPT_VERSION:'deterministic/8a.2');
   // Remember wording across views without ever feeding another read to a writer.
   // Early wording is derived from the same visible baseline evidence, not a new fact.
