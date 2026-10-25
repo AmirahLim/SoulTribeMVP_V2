@@ -5,7 +5,9 @@ const source=readFileSync(resolve(__dirname,'../../app/LandingPageContent.tsx'),
 describe('Current intro',()=>{
   it('links top navigation sign up directly to onboarding',()=>{
     expect(source).toContain('<Link href="/onboarding">Sign up</Link>');
-    expect(source).toContain('<h1>Quick, real-time pitching.</h1><p>Intentional social matching</p>');
+    expect(source).toContain('Not just a');
+    expect(source).toContain('social app');
+    expect(source).toContain('For people between worlds, and the ones they’ll feel at home');
     expect(source).not.toContain('Your kind of people.');
     expect(source).not.toContain('Intentional friendship matching.');
   });
@@ -24,22 +26,31 @@ describe('Current intro',()=>{
     expect(source).toContain('screen="social-pages"');
   });
   it('maps the supplied captures in order and keeps the connection and pitches previews',()=>{
-    expect(source).toContain('<Phone screen="going" className={styles.behind}/><Phone screen="radar" className={styles.front}/>');
+    expect(source).toContain('screen="going"');
+    expect(source).toContain('screen="radar"');
     expect(source).toContain('<Phone screen="connection"/><Phone screen="threads"/>');
     expect(source).toContain('<Phone screen="pitches"/><p className={styles.caption}>Your Pitches');
     for(const key of ['going','radar','social-pages','matching','how-matching','how-pitch','how-guests','memory-phone']){
       expect(existsSync(resolve(__dirname,'../../public/images/landing/supplied-'+key+'.jpg'))).toBe(true);
     }
   });
-  it('explains three steps and shows only one already-framed invitation image',()=>{
+  it('explains three steps and keeps the framed invitation in a scrapbook board',()=>{
     const how=source.split('<section id="how"')[1].split('<section className={styles.outingGallery}')[0];
     expect(how.match(/<Phone /g)).toHaveLength(3);
     expect(how).toContain('Precise matching');
     expect(how).toContain('Pitch an outing');
     expect(how).toContain('Choose your matches');
     const gallery=source.split('<section className={styles.outingGallery}')[1].split('<section id="faq"')[0];
-    expect(gallery.match(/<img /g)).toHaveLength(1);
     expect(gallery).not.toContain('<Phone');
     expect(gallery).toContain('supplied-memory-phone.jpg');
+    expect(gallery.match(/<img /g)?.length).toBeGreaterThanOrEqual(1);
+  });
+  it('follows the hero with the definition written on the scrap collage',()=>{
+    expect(source).toContain('className={styles.definition}');
+    expect(source).toContain('artifact-radio.png');
+    expect(source).not.toContain('Local hosts first');
+    expect(source).not.toContain('Verb & Noun');
+    expect(source).not.toContain('className={styles.logotype}');
+    expect(source).toContain('a thoughtful process of crafting experiences that engage people, shape clarity, and spark delights.');
   });
 });
