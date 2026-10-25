@@ -577,14 +577,6 @@
     linear-gradient(180deg, #d4b48a40, #c4a57a28),
     url('/images/landing/artifacts/felt-desk.jpg') center top / 100vw auto repeat #e8d5b8 !important;
 }
-:global(html):has([data-landing='felt']),
-:global(body):has([data-landing='felt']),
-:global(main):has([data-landing='felt']){
-  background:
-    linear-gradient(180deg, #d4b48a40, #c4a57a28),
-    url('/images/landing/artifacts/felt-desk.jpg') center top / 100vw auto repeat #e8d5b8 !important;
-  background-color:#e8d5b8 !important;
-}
 .hero .backdrop{object-position:center 42%}
 .hero:after{background:linear-gradient(#24160f4d,#1a120c40 48%,#120c0c7a)!important}
 .heroText{position:relative;z-index:1;max-width:900px;padding:12vh 0 10vh}

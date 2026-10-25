@@ -14,6 +14,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+html:has([data-landing='felt']),
+body:has([data-landing='felt']),
+main:has([data-landing='felt']) {
+  background:
+    linear-gradient(180deg, #d4b48a40, #c4a57a28),
+    url('/images/landing/artifacts/felt-desk.jpg') center top / 100vw auto repeat #e8d5b8 !important;
+  background-color: #e8d5b8 !important;
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
