@@ -3,7 +3,7 @@
 import {useEffect, useState} from 'react';
 import styles from './landing.module.css';
 
-const KEY = 'soul-tribe-landing-arrange';
+const KEY = 'soul-tribe-landing-arrange-v2';
 
 type Pos = {left: string; top: string};
 type Store = Record<string, Pos>;
@@ -21,17 +21,6 @@ function save(store: Store) {
   localStorage.setItem(KEY, JSON.stringify(store));
 }
 
-function apply(store: Store) {
-  for (const [id, pos] of Object.entries(store)) {
-    const el = document.querySelector<HTMLElement>(`[data-arrange="${id}"]`);
-    if (!el) continue;
-    el.style.right = 'auto';
-    el.style.bottom = 'auto';
-    el.style.left = pos.left;
-    el.style.top = pos.top;
-  }
-}
-
 export default function LandingArrange() {
   const [allowed, setAllowed] = useState(false);
   const [on, setOn] = useState(false);
@@ -41,8 +30,6 @@ export default function LandingArrange() {
     const edit = new URLSearchParams(window.location.search).has('edit');
     const ok = edit || host === 'localhost' || host === '127.0.0.1';
     setAllowed(ok);
-    if (!ok) return;
-    apply(load());
     if (edit) setOn(true);
   }, []);
 

@@ -80,119 +80,95 @@
   user-select:none;
   filter:drop-shadow(10px 18px 16px #2c21186e);
 }
-.objLetter{
-  position:absolute;
-  left:8%;
-  top:auto;
-  bottom:22%;
-  width:13%;
-  z-index:2;
-  transform:rotate(-11deg);
-}
+.objLetter,.objStar,.objStarTwo,.objButterfly{display:none}
 .objBooks{
   position:absolute;
-  left:-8%;
-  top:-4%;
-  width:26%;
-  z-index:3;
-  transform:rotate(-12deg);
+  left:-12%;
+  top:-8%;
+  width:30%;
+  z-index:4;
+  transform:rotate(-6deg);
 }
 .objVinyl{
   position:absolute;
-  left:72%;
-  top:37%;
+  left:-6%;
+  top:19%;
   width:13%;
-  z-index:3;
-  transform:rotate(9deg);
+  z-index:2;
+  transform:rotate(2deg);
 }
 .objTicket{
   position:absolute;
-  left:6%;
-  top:-8%;
-  width:34%;
+  left:11%;
+  top:7%;
+  width:28%;
   z-index:3;
-  transform:rotate(-8deg);
+  transform:rotate(-1deg);
 }
 .objRadio{
   position:absolute;
-  left:76%;
-  right:auto;
-  top:-21%;
-  width:44%;
+  left:auto;
+  right:-4%;
+  top:1%;
+  width:46%;
   z-index:7;
-  transform:rotate(6deg);
+  transform:rotate(1deg);
 }
 .objCassette{
   position:absolute;
-  left:-11%;
-  top:82%;
-  bottom:auto;
-  width:42%;
-  z-index:3;
-  transform:rotate(-6deg);
-}
-.objStar{
-  position:absolute;
-  left:76%;
-  right:auto;
-  top:-1%;
-  width:18%;
+  left:-5%;
+  top:auto;
+  bottom:-10%;
+  width:62%;
   z-index:4;
-  transform:rotate(12deg);
-}
-.objStarTwo{
-  position:absolute;
-  right:12%;
-  bottom:18%;
-  width:11%;
-  z-index:12;
-  transform:rotate(-20deg);
+  transform:rotate(-1deg);
 }
 .objCamera{
   position:absolute;
-  right:6%;
-  bottom:8%;
-  width:16%;
-  z-index:10;
-  transform:rotate(-10deg);
+  right:-6%;
+  bottom:-6%;
+  width:34%;
+  z-index:8;
+  transform:rotate(1deg);
 }
 .objButterfly{
   position:absolute;
-  left:-3%;
-  top:41%;
-  bottom:auto;
-  width:11%;
-  z-index:11;
-  transform:rotate(12deg);
+  left:30%;
+  top:auto;
+  bottom:12%;
+  width:22%;
+  z-index:9;
+  transform:rotate(3deg);
 }
 .objRose{
   position:absolute;
-  left:9%;
-  top:15%;
-  bottom:auto;
-  width:6%;
-  z-index:12;
-  transform:rotate(18deg);
+  left:22%;
+  top:auto;
+  bottom:20%;
+  width:8%;
+  height:48px;
+  object-fit:contain;
+  z-index:10;
+  transform:rotate(8deg);
 }
 .objPin,.objPinTwo{
   position:absolute;
-  top:-18px;
   width:28px;
   z-index:9;
   filter:drop-shadow(2px 6px 6px #2c211866);
 }
-.objPin{left:16%;top:-6%;transform:rotate(-18deg)}
-.objPinTwo{right:22px;transform:rotate(14deg)}
+.objPin{left:6%;top:-6%;transform:rotate(-16deg)}
+.objPinTwo{right:28%;top:8%;transform:rotate(6deg)}
 .notebook{
   position:relative;
   z-index:5;
   display:flex;
   align-items:center;
   justify-content:center;
-  width:min(560px, 54%);
-  min-height:380px;
-  margin:28px auto 48px;
-  padding:80px 36px 92px;
+  width:min(560px, 90%);
+  min-height:420px;
+  margin:48px auto 80px;
+  padding:108px 28px 132px;
   text-align:center;
   background-color:#f3ead6;
   background-image:repeating-linear-gradient(#ead6b4 0 1px, transparent 1px 44px);
@@ -915,21 +891,18 @@
   .tileWalk,.tileCafe,.tileRun,.tileStudio,.tileNight{width:42vw}
   .envelope{left:8%;top:auto;bottom:40px}
   .rewindDesk{min-height:0;padding-bottom:8px;max-width:100%}
-  .notebook{width:82%;margin:72px auto 36px;padding:72px 28px 88px;z-index:5}
+  .notebook{width:90%;margin:40px auto 72px;padding:100px 20px 128px;z-index:5}
   .logotype{padding-right:36px;font-size:clamp(3.2rem,16vw,4.6rem)}
-  .dictDef{max-width:13em;margin:0 auto !important;text-align:center;font-size:clamp(1.7rem,7vw,2.2rem);line-height:36px}
-  .objBooks{left:-10%;width:32%;top:-6%}
-  .objRadio{width:42%;left:76%;right:auto;top:-21%;bottom:auto;z-index:7}
-  .objCassette{width:58%;left:-11%;top:82%;bottom:auto}
-  .objTicket{width:40%;left:4%;top:8px}
-  .objStar{width:22%;left:76%;right:auto;top:-1%}
-  .filmReel{width:64%;left:52%;right:auto;top:91%;bottom:auto;z-index:10}
-  .objVinyl{width:22%;left:72%;top:37%}
-  .objLetter{width:22%;left:2%;bottom:16%}
-  .objCamera{width:32%;right:2%;bottom:6%}
-  .objButterfly{width:24%;left:-3%;top:41%;bottom:auto}
-  .objStarTwo{width:18%;right:4%;bottom:14%}
-  .objRose{width:12%;left:9%;top:15%;bottom:auto}
+  .dictDef{max-width:11.5em;margin:0 auto !important;text-align:center;font-size:clamp(1.7rem,7vw,2.2rem);line-height:36px}
+  .objBooks{left:-12%;width:30%;top:-8%}
+  .objRadio{width:46%;left:auto;right:-4%;top:1%;bottom:auto;z-index:7}
+  .objCassette{width:64%;left:-6%;top:auto;bottom:-10%}
+  .objTicket{width:30%;left:10%;top:7%}
+  .filmReel{width:50%;left:2%;right:auto;top:auto;bottom:10%;z-index:8}
+  .objVinyl{width:14%;left:-6%;top:19%}
+  .objCamera{width:36%;right:-6%;bottom:-6%}
+  .objButterfly{display:none}
+  .objRose{width:9%;left:22%;top:auto;bottom:20%;height:44px}
   .scrapNote{left:2%;top:36%;width:120px}
 }
 
@@ -951,15 +924,15 @@
 }
 .filmReel{
   position:absolute;
-  left:52%;
+  left:2%;
   right:auto;
-  top:91%;
-  bottom:auto;
-  z-index:10;
+  top:auto;
+  bottom:10%;
+  z-index:8;
   display:flex;
   align-items:flex-start;
-  gap:12px;
-  width:34%;
+  gap:10px;
+  width:50%;
   padding:0;
   background:transparent;
   box-shadow:none;
@@ -976,13 +949,13 @@
   box-shadow:8px 14px 22px #2c211855;
   filter:grayscale(.08) sepia(.16) contrast(1.04);
 }
-.filmReel img:nth-child(1){transform:rotate(-9deg)}
-.filmReel img:nth-child(2){transform:rotate(7deg);margin-top:22px}
+.filmReel img:nth-child(1){transform:rotate(-4deg)}
+.filmReel img:nth-child(2){transform:rotate(5deg);margin-top:10px}
 .filmReel img:nth-child(n+3){display:none}
 .barcode{
   position:absolute;
-  left:34%;
-  bottom:6%;
+  left:42%;
+  bottom:2%;
   z-index:3;
   width:110px;
   height:32px;
