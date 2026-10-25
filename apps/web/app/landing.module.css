@@ -80,36 +80,36 @@
   user-select:none;
   filter:drop-shadow(10px 18px 16px #2c21186e);
 }
-.objLetter,.objStar,.objStarTwo,.objButterfly{display:none}
+.objLetter,.objStar,.objStarTwo{display:none}
 .objBooks{
   position:absolute;
-  left:-12%;
-  top:-8%;
-  width:30%;
+  left:-9%;
+  top:-6%;
+  width:32%;
   z-index:4;
   transform:rotate(-6deg);
 }
 .objVinyl{
   position:absolute;
-  left:-6%;
-  top:19%;
-  width:13%;
+  left:-7%;
+  top:13%;
+  width:14%;
   z-index:2;
   transform:rotate(2deg);
 }
 .objTicket{
   position:absolute;
-  left:11%;
-  top:7%;
-  width:28%;
+  left:9%;
+  top:3%;
+  width:34%;
   z-index:3;
   transform:rotate(-1deg);
 }
 .objRadio{
   position:absolute;
   left:auto;
-  right:-4%;
-  top:1%;
+  right:-8%;
+  top:-2%;
   width:46%;
   z-index:7;
   transform:rotate(1deg);
@@ -118,37 +118,36 @@
   position:absolute;
   left:-5%;
   top:auto;
-  bottom:-10%;
-  width:62%;
+  bottom:-4%;
+  width:58%;
   z-index:4;
   transform:rotate(-1deg);
 }
 .objCamera{
   position:absolute;
-  right:-6%;
-  bottom:-6%;
-  width:34%;
+  right:-8%;
+  bottom:-3%;
+  width:40%;
   z-index:8;
   transform:rotate(1deg);
 }
 .objButterfly{
   position:absolute;
-  left:30%;
+  left:31%;
   top:auto;
-  bottom:12%;
-  width:22%;
-  z-index:9;
+  bottom:7%;
+  width:27%;
+  z-index:11;
   transform:rotate(3deg);
 }
 .objRose{
   position:absolute;
-  left:22%;
+  left:40%;
   top:auto;
-  bottom:20%;
-  width:8%;
-  height:48px;
-  object-fit:contain;
-  z-index:10;
+  bottom:13%;
+  width:15%;
+  height:auto;
+  z-index:12;
   transform:rotate(8deg);
 }
 .objPin,.objPinTwo{
@@ -157,8 +156,8 @@
   z-index:9;
   filter:drop-shadow(2px 6px 6px #2c211866);
 }
-.objPin{left:6%;top:-6%;transform:rotate(-16deg)}
-.objPinTwo{right:28%;top:8%;transform:rotate(6deg)}
+.objPin{left:7%;top:-7%;transform:rotate(-16deg)}
+.objPinTwo{right:8%;top:-7%;transform:rotate(6deg)}
 .notebook{
   position:relative;
   z-index:5;
@@ -216,6 +215,7 @@
   position:relative;
   z-index:6;
 }
+.dictDef span{display:block;white-space:nowrap}
 .pen{
   position:absolute;
   right:28px;
@@ -893,16 +893,16 @@
   .rewindDesk{min-height:0;padding-bottom:8px;max-width:100%}
   .notebook{width:90%;margin:40px auto 72px;padding:100px 20px 128px;z-index:5}
   .logotype{padding-right:36px;font-size:clamp(3.2rem,16vw,4.6rem)}
-  .dictDef{max-width:11.5em;margin:0 auto !important;text-align:center;font-size:clamp(1.7rem,7vw,2.2rem);line-height:36px}
-  .objBooks{left:-12%;width:30%;top:-8%}
-  .objRadio{width:46%;left:auto;right:-4%;top:1%;bottom:auto;z-index:7}
-  .objCassette{width:64%;left:-6%;top:auto;bottom:-10%}
-  .objTicket{width:30%;left:10%;top:7%}
-  .filmReel{width:50%;left:2%;right:auto;top:auto;bottom:10%;z-index:8}
-  .objVinyl{width:14%;left:-6%;top:19%}
-  .objCamera{width:36%;right:-6%;bottom:-6%}
-  .objButterfly{display:none}
-  .objRose{width:9%;left:22%;top:auto;bottom:20%;height:44px}
+  .dictDef{max-width:none;margin:0 auto !important;text-align:center;font-size:clamp(1.7rem,7vw,2.2rem);line-height:36px}
+  .objBooks{left:-9%;width:32%;top:-6%}
+  .objRadio{width:46%;left:auto;right:-8%;top:-2%;bottom:auto;z-index:7}
+  .objCassette{width:58%;left:-5%;top:auto;bottom:-4%}
+  .objTicket{width:34%;left:9%;top:3%}
+  .filmReel{width:55%;left:1%;right:auto;top:auto;bottom:7%;z-index:8}
+  .objVinyl{width:14%;left:-7%;top:13%}
+  .objCamera{width:40%;right:-8%;bottom:-3%}
+  .objButterfly{display:block;width:27%;left:31%;bottom:7%;top:auto}
+  .objRose{width:15%;left:40%;top:auto;bottom:13%;height:auto}
   .scrapNote{left:2%;top:36%;width:120px}
 }
 
@@ -924,15 +924,15 @@
 }
 .filmReel{
   position:absolute;
-  left:2%;
+  left:1%;
   right:auto;
   top:auto;
-  bottom:10%;
+  bottom:7%;
   z-index:8;
   display:flex;
   align-items:flex-start;
   gap:10px;
-  width:50%;
+  width:55%;
   padding:0;
   background:transparent;
   box-shadow:none;
@@ -954,8 +954,8 @@
 .filmReel img:nth-child(n+3){display:none}
 .barcode{
   position:absolute;
-  left:42%;
-  bottom:2%;
+  left:48%;
+  bottom:0;
   z-index:3;
   width:110px;
   height:32px;

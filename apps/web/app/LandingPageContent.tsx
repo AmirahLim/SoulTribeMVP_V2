@@ -20,6 +20,7 @@ const caveat = Caveat({
   variable: '--font-caveat',
   display: 'swap',
 });
+const postDefinition = 'a thoughtful process of crafting experiences that engage people, shape clarity, and spark delights.';
 
 function CTA({children='Find your people'}:{children?:React.ReactNode}) {
   return <Link className={styles.cta} href="/onboarding">{children}<ArrowRight size={16} aria-hidden="true"/></Link>;
@@ -78,13 +79,18 @@ export default function LandingPageContent(){
               <img data-arrange="books" className={`${styles.cutout} ${styles.objBooks}`} src="/images/landing/artifacts/artifact-books.png" alt="" width={900} height={623}/>
               <img data-arrange="pin" className={`${styles.cutout} ${styles.objPin}`} src="/images/landing/artifacts/artifact-pin.png" alt="" width={407} height={721}/>
               <img data-arrange="ticket" className={`${styles.cutout} ${styles.objTicket}`} src="/images/landing/artifacts/artifact-ticket.png" alt="" width={900} height={521}/>
-              <p id="post-definition" className={styles.dictDef}>a thoughtful process of crafting experiences that engage people, shape clarity, and spark delights.</p>
+              <p id="post-definition" className={styles.dictDef} aria-label={postDefinition}>
+                <span>a thoughtful process of</span>
+                <span>crafting experiences that</span>
+                <span>engage people, shape</span>
+                <span>clarity, and spark delights.</span>
+              </p>
               <img data-arrange="radio" className={`${styles.cutout} ${styles.objRadio}`} src="/images/landing/artifacts/artifact-radio.png" alt="" width={895} height={765}/>
               <img data-arrange="pinTwo" className={`${styles.cutout} ${styles.objPinTwo}`} src="/images/landing/artifacts/artifact-pin.png" alt="" width={407} height={721}/>
               <img data-arrange="cassette" className={`${styles.cutout} ${styles.objCassette}`} src="/images/landing/artifacts/artifact-cassette.png" alt="" width={880} height={535}/>
               <div data-arrange="film" className={styles.filmReel} aria-hidden="true">
                 <img src="/images/landing/hero-walk.jpg" alt="" width={420} height={280}/>
-                <img src="/images/landing/artifacts/artifact-butterfly.png" alt="" width={900} height={635}/>
+                <img src="/images/landing/scene-cafe.jpg" alt="" width={640} height={427}/>
               </div>
               <img data-arrange="butterfly" className={`${styles.cutout} ${styles.objButterfly}`} src="/images/landing/artifacts/artifact-butterfly.png" alt="" width={900} height={635}/>
               <img data-arrange="rose" className={`${styles.cutout} ${styles.objRose}`} src="/images/landing/artifacts/artifact-rose.png" alt="" width={606} height={810}/>
