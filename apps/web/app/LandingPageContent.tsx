@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Caveat, Fraunces, Source_Sans_3 } from 'next/font/google';
+import LandingArrange from './LandingArrange';
 import styles from './landing.module.css';
 
 const fraunces = Fraunces({
@@ -72,29 +73,29 @@ export default function LandingPageContent(){
       <div className={[styles.scrapbook, fraunces.variable, sourceSans.variable, caveat.variable].join(' ')}>
         <section className={styles.definition} aria-labelledby="post-definition">
           <div className={styles.rewindDesk}>
-            <img className={`${styles.cutout} ${styles.objLetter}`} src="/images/landing/artifacts/artifact-letter.png" alt="" width={807} height={1096}/>
-            <img className={`${styles.cutout} ${styles.objVinyl}`} src="/images/landing/artifacts/artifact-vinyl.png" alt="" width={900} height={833}/>
+            <img data-arrange="letter" className={`${styles.cutout} ${styles.objLetter}`} src="/images/landing/artifacts/artifact-letter.png" alt="" width={807} height={1096}/>
+            <img data-arrange="vinyl" className={`${styles.cutout} ${styles.objVinyl}`} src="/images/landing/artifacts/artifact-vinyl.png" alt="" width={900} height={833}/>
             <article className={styles.notebook}>
-              <img className={`${styles.cutout} ${styles.objPin}`} src="/images/landing/artifacts/artifact-pin.png" alt="" width={407} height={721}/>
-              <img className={`${styles.cutout} ${styles.objPinTwo}`} src="/images/landing/artifacts/artifact-pin.png" alt="" width={407} height={721}/>
-              <img className={`${styles.cutout} ${styles.objTicket}`} src="/images/landing/artifacts/artifact-ticket.png" alt="" width={900} height={521}/>
-              <img className={`${styles.cutout} ${styles.objBooks}`} src="/images/landing/artifacts/artifact-books.png" alt="" width={900} height={623}/>
-              <img className={`${styles.cutout} ${styles.objRadio}`} src="/images/landing/artifacts/artifact-radio.png" alt="" width={895} height={765}/>
-              <img className={`${styles.cutout} ${styles.objStar}`} src="/images/landing/artifacts/artifact-star.png" alt="" width={900} height={885}/>
-              <img className={`${styles.cutout} ${styles.objCassette}`} src="/images/landing/artifacts/artifact-cassette.png" alt="" width={880} height={535}/>
+              <img data-arrange="pin" className={`${styles.cutout} ${styles.objPin}`} src="/images/landing/artifacts/artifact-pin.png" alt="" width={407} height={721}/>
+              <img data-arrange="pinTwo" className={`${styles.cutout} ${styles.objPinTwo}`} src="/images/landing/artifacts/artifact-pin.png" alt="" width={407} height={721}/>
+              <img data-arrange="ticket" className={`${styles.cutout} ${styles.objTicket}`} src="/images/landing/artifacts/artifact-ticket.png" alt="" width={900} height={521}/>
+              <img data-arrange="books" className={`${styles.cutout} ${styles.objBooks}`} src="/images/landing/artifacts/artifact-books.png" alt="" width={900} height={623}/>
+              <img data-arrange="star" className={`${styles.cutout} ${styles.objStar}`} src="/images/landing/artifacts/artifact-star.png" alt="" width={900} height={885}/>
+              <img data-arrange="cassette" className={`${styles.cutout} ${styles.objCassette}`} src="/images/landing/artifacts/artifact-cassette.png" alt="" width={880} height={535}/>
               <p id="post-definition" className={styles.dictDef}>a thoughtful process of crafting experiences that engage people, shape clarity, and spark delights.</p>
+              <img data-arrange="radio" className={`${styles.cutout} ${styles.objRadio}`} src="/images/landing/artifacts/artifact-radio.png" alt="" width={895} height={765}/>
             </article>
-            <div className={styles.filmReel} aria-hidden="true">
+            <div data-arrange="film" className={styles.filmReel} aria-hidden="true">
               <img src="/images/landing/hero-walk.jpg" alt="" width={420} height={280}/>
               <img src="/images/landing/scene-cafe.jpg" alt="" width={640} height={427}/>
               <img src="/images/landing/scene-studio.jpg" alt="" width={640} height={427}/>
               <img src="/images/landing/scene-run.jpg" alt="" width={640} height={427}/>
             </div>
-            <img className={`${styles.cutout} ${styles.objStarTwo}`} src="/images/landing/artifacts/artifact-star.png" alt="" width={900} height={885}/>
-            <img className={`${styles.cutout} ${styles.objCamera}`} src="/images/landing/artifacts/artifact-camera.png" alt="" width={900} height={632}/>
-            <img className={`${styles.cutout} ${styles.objButterfly}`} src="/images/landing/artifacts/artifact-butterfly.png" alt="" width={900} height={635}/>
-            <img className={`${styles.cutout} ${styles.objRose}`} src="/images/landing/artifacts/artifact-rose.png" alt="" width={606} height={810}/>
-            <span className={styles.barcode} aria-hidden="true"/>
+            <img data-arrange="starTwo" className={`${styles.cutout} ${styles.objStarTwo}`} src="/images/landing/artifacts/artifact-star.png" alt="" width={900} height={885}/>
+            <img data-arrange="camera" className={`${styles.cutout} ${styles.objCamera}`} src="/images/landing/artifacts/artifact-camera.png" alt="" width={900} height={632}/>
+            <img data-arrange="butterfly" className={`${styles.cutout} ${styles.objButterfly}`} src="/images/landing/artifacts/artifact-butterfly.png" alt="" width={900} height={635}/>
+            <img data-arrange="rose" className={`${styles.cutout} ${styles.objRose}`} src="/images/landing/artifacts/artifact-rose.png" alt="" width={606} height={810}/>
+            <span data-arrange="barcode" className={styles.barcode} aria-hidden="true"/>
           </div>
         </section>
         <section className={styles.hostsCard} aria-labelledby="together-heading">
@@ -118,7 +119,6 @@ export default function LandingPageContent(){
             <article className={styles.storyRow}><div className={styles.storyVisual}><div className={styles.matchPair}><Phone screen="connection"/><Phone screen="threads"/></div><p className={styles.caption}>Connection Notes · Thread by thread</p></div><div className={styles.storyCopy}><small>03 · VIEW CONNECTION</small><h3>See what exists between you.</h3><p>A profile tells you about a person. Your connection tells you about the two of you.</p><p>Open View Connection from a profile to explore where your patterns meet: what may feel easy, where you might rub, and what you could enjoy doing together. As you share more, there’s more to draw on.</p><strong>Knowing someone is interesting is different from knowing why the two of you might work.</strong></div></article>
             <article className={styles.storyRow}><div className={styles.storyVisual}><Phone screen="pitches"/><p className={styles.caption}>Your Pitches · Manage your outings</p></div><div className={styles.storyCopy}><small>04 · PITCH AN OUTING</small><h3>Have a plan.<br/>Missing the people?</h3><p>A gallery this afternoon. Padel tomorrow. Drinks after work. A beach day because Sunday suddenly opened up.</p><p>Pitch it when the thought happens. Choose what you’re doing, where, when and how many people you want around. Invite people or let them ask to join.</p><p>As requests come in, you decide who comes. Open their profile. See your connection. Choose the group you want to bring together.</p><strong>The point isn’t to collect matches. It’s to give them somewhere to become real.</strong></div></article>
           </div>
-          <p className={styles.caption}>App previews with fictional names and replacement profile photos. These are examples, not live listings.</p>
         </section>
         <section id="how" className={styles.how}>
           <img className={styles.backdrop} src="/images/early-read/shore.jpg" alt="" loading="lazy"/>
@@ -174,5 +174,6 @@ export default function LandingPageContent(){
       </div>
     </main>
     <footer className={`${styles.footer} ${styles.scrapbookFooter}`}><p>More time together, outside the app.</p><div><a href="#features">Features</a><a href="#how">How it works</a><a href="#faq">FAQ</a><Link href="/auth/signin">Log in</Link></div></footer>
+    <LandingArrange/>
   </div>;
 }
